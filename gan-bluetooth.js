@@ -100,18 +100,17 @@ class GANBluetooth {
 
             console.log('Requesting Bluetooth device...');
             
-            // Try connecting by MAC address first (most direct approach)
+            // Try with specific services
             try {
-                console.log('Trying to connect by MAC address: F8:95:4A:72:97:CC...');
+                console.log('Trying device request with specific filters...');
                 this.device = await navigator.bluetooth.requestDevice({
                     filters: [
-                        { 
-                            deviceId: 'F8:95:4A:72:97:CC'
-                        }
+                        { namePrefix: 'GAN' },
+                        { namePrefix: 'Gan' },
+                        { namePrefix: 'MG' }, // Some GAN cubes show as MG
+                        { namePrefix: 'i' }   // Some show as just 'i'
                     ],
                     optionalServices: [
-                        '00000010-0000-fff7-fff6-fff5fff4fff0', // YOUR CUBE'S PRIMARY SERVICE
-                        '0000fee0-0000-1000-8000-00805f9b34fb', // YOUR CUBE'S SECONDARY SERVICE
                         ...this.SERVICE_UUIDS,
                         this.BATTERY_SERVICE_UUID,
                         '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
@@ -120,58 +119,17 @@ class GANBluetooth {
                         '00001801-0000-1000-8000-00805f9b34fb'  // Generic Attribute
                     ]
                 });
-                console.log('Connected via MAC address successfully!');
-            } catch (macError) {
-                console.log('MAC address connection failed:', macError.message);
-                
-                // Try the most permissive approach
-                try {
-                    console.log('Trying permissive device request...');
-                    this.device = await navigator.bluetooth.requestDevice({
-                        acceptAllDevices: true,
-                        optionalServices: [
-                            ...this.SERVICE_UUIDS,
-                            this.BATTERY_SERVICE_UUID,
-                            '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
-                            '0000180f-0000-1000-8000-00805f9b34fb', // Battery Service
-                            '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
-                            '00001801-0000-1000-8000-00805f9b34fb'  // Generic Attribute
-                        ]
-                    });
-                } catch (error) {
-                    console.log('Permissive request failed, trying with specific services...');
-                    // Try with specific services
-                    try {
-                        this.device = await navigator.bluetooth.requestDevice({
-                            filters: [
-                                { namePrefix: 'GAN' },
-                                { namePrefix: 'Gan' },
-                                { namePrefix: 'MG' }, // Some GAN cubes show as MG
-                                { namePrefix: 'i' }   // Some show as just 'i'
-                            ],
-                            optionalServices: [
-                                ...this.SERVICE_UUIDS,
-                                this.BATTERY_SERVICE_UUID,
-                                '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
-                                '0000180f-0000-1000-8000-00805f9b34fb', // Battery Service
-                                '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
-                                '00001801-0000-1000-8000-00805f9b34fb'  // Generic Attribute
-                            ]
-                        });
-                    } catch (error2) {
-                        console.log('Specific service request failed, trying broader approach...');
-                        // Fallback: request device without specific services
-                        this.device = await navigator.bluetooth.requestDevice({
-                            filters: [
-                                { namePrefix: 'GAN' },
-                                { namePrefix: 'Gan' },
-                                { namePrefix: 'MG' },
-                                { namePrefix: 'i' }
-                            ],
-                            acceptAllDevices: false
-                        });
-                    }
-                }
+            } catch (error) {
+                console.log('Specific filter request failed, trying broader approach...');
+                // Fallback: request device without specific services
+                this.device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'GAN' },
+                        { namePrefix: 'Gan' },
+                        { namePrefix: 'MG' },
+                        { namePrefix: 'i' }
+                    ]
+                });
             }
 
             console.log('Device selected:', this.device.name, this.device.id);

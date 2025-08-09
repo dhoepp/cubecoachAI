@@ -36,7 +36,7 @@ class CubeCoachApp {
         this.bluetooth.on('error', (error) => this.handleBluetoothError(error));
         this.bluetooth.on('batteryLevel', (level) => this.updateBatteryLevel(level));
         this.bluetooth.on('cubeState', (state) => this.handleCubeState(state));
-        this.bluetooth.on('moveData', (move) => this.handleMoveData(move));
+        this.bluetooth.on('move', (move) => this.handleMoveData(move));
         this.bluetooth.on('rawData', (data) => this.handleRawData(data));
         this.bluetooth.on('solveComplete', (data) => this.handleSolveComplete(data));
 
