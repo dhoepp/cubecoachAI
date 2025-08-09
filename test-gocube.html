@@ -114,6 +114,7 @@
             <button id="connect-btn" class="btn">Connect GoCube</button>
             <button id="disconnect-btn" class="btn" disabled>Disconnect</button>
             <button id="start-test-btn" class="btn" disabled>Start Test</button>
+            <button id="wake-cube-btn" class="btn" disabled>Wake Up Cube</button>
             <button id="clear-log-btn" class="btn">Clear Log</button>
         </div>
         
@@ -175,6 +176,7 @@
                 this.connectBtn = document.getElementById('connect-btn');
                 this.disconnectBtn = document.getElementById('disconnect-btn');
                 this.startTestBtn = document.getElementById('start-test-btn');
+                this.wakeCubeBtn = document.getElementById('wake-cube-btn');
                 this.clearLogBtn = document.getElementById('clear-log-btn');
                 this.connectionStatus = document.getElementById('connection-status');
                 this.logElement = document.getElementById('log');
@@ -194,6 +196,7 @@
                 this.connectBtn.addEventListener('click', () => this.connect());
                 this.disconnectBtn.addEventListener('click', () => this.disconnect());
                 this.startTestBtn.addEventListener('click', () => this.startTest());
+                this.wakeCubeBtn.addEventListener('click', () => this.wakeCube());
                 this.clearLogBtn.addEventListener('click', () => this.clearLog());
                 
                 // GoCube Events
@@ -223,6 +226,25 @@
                     await this.bluetooth.disconnect();
                 } catch (error) {
                     this.log(`⚠️ Disconnect error: ${error.message}`);
+                }
+            }
+            
+            async wakeCube() {
+                try {
+                    this.log('🔔 Sending wake-up commands to GoCube...');
+                    // Try to send some basic commands to wake up the cube
+                    if (this.bluetooth.sendCommand) {
+                        await this.bluetooth.sendCommand([0x01]); // Basic ping
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await this.bluetooth.sendCommand([0x02, 0x01]); // Request accelerometer
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await this.bluetooth.sendCommand([0x03]); // Request status
+                        this.log('📤 Wake-up commands sent');
+                    } else {
+                        this.log('⚠️ sendCommand method not available');
+                    }
+                } catch (error) {
+                    this.log(`❌ Wake-up failed: ${error.message}`);
                 }
             }
             
@@ -292,13 +314,14 @@
                 this.connectBtn.disabled = true;
                 this.disconnectBtn.disabled = false;
                 this.startTestBtn.disabled = false;
+                this.wakeCubeBtn.disabled = false;
                 this.connectionStatus.className = 'status connected';
                 this.connectionStatus.textContent = `📡 Connected to ${data.name || 'GoCube'}`;
                 this.log(`✅ Connected to ${data.name || 'GoCube'} (${data.id})`);
                 
-                // Enable accelerometer mode for testing
-                this.bluetooth.enableAccelerometer(true);
-                this.log('🎯 Accelerometer mode enabled for testing');
+                // GoCube should be ready for data - no special initialization needed
+                this.log('🎯 GoCube ready - waiting for data...');
+                this.log('💡 Try moving the cube or turning faces to generate data');
             }
             
             handleDisconnected() {
@@ -306,6 +329,7 @@
                 this.connectBtn.disabled = false;
                 this.disconnectBtn.disabled = true;
                 this.startTestBtn.disabled = true;
+                this.wakeCubeBtn.disabled = true;
                 this.connectionStatus.className = 'status disconnected';
                 this.connectionStatus.textContent = '📡 Disconnected';
                 this.log('❌ Disconnected from GoCube');
@@ -357,9 +381,13 @@
             }
             
             handleRawData(data) {
-                // Log raw data occasionally for debugging
-                if (Math.random() < 0.05) { // 5% chance
-                    this.log(`🔍 Raw: [${data.bytes.slice(0, 8).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}...]`);
+                // Log ALL raw data for debugging - not just 5%
+                this.log(`🔍 Raw data: [${data.bytes.slice(0, 12).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}] (${data.bytes.length} bytes)`);
+                
+                // Also count as general activity
+                if (this.testInProgress) {
+                    // Any data counts as activity
+                    this.log(`📡 Data activity detected during test`);
                 }
             }
             
