@@ -5,7 +5,7 @@
 
 class CubeCoachApp {
     constructor() {
-        this.bluetooth = new GANBluetooth();
+        this.bluetooth = new GoCubeBluetooth();
         this.timer = new Timer();
         this.solveParser = new SolveParser();
         
@@ -13,6 +13,14 @@ class CubeCoachApp {
         this.isAutoTimer = true; // Auto start/stop timer based on cube data
         this.lastMoveTime = 0;
         this.solveStarted = false;
+        
+        // Solve state management
+        this.cubeState = 'solved'; // 'solved', 'scrambled', 'solving'
+        this.scrambleStartTime = null;
+        this.scrambleInProgress = false;
+        this.movesSinceScramble = 0;
+        this.scrambleTimeout = null;
+        this.isWaitingForInspection = false;
         
         this.initializeEventListeners();
         this.initializeUI();
@@ -29,6 +37,7 @@ class CubeCoachApp {
         this.bluetooth.on('batteryLevel', (level) => this.updateBatteryLevel(level));
         this.bluetooth.on('cubeState', (state) => this.handleCubeState(state));
         this.bluetooth.on('moveData', (move) => this.handleMoveData(move));
+        this.bluetooth.on('rawData', (data) => this.handleRawData(data));
         this.bluetooth.on('solveComplete', (data) => this.handleSolveComplete(data));
 
         // Timer events
@@ -50,6 +59,12 @@ class CubeCoachApp {
         document.getElementById('start-timer-btn').addEventListener('click', () => this.startTimer());
         document.getElementById('stop-timer-btn').addEventListener('click', () => this.stopTimer());
         document.getElementById('reset-timer-btn').addEventListener('click', () => this.resetTimer());
+
+        // Moves and debug controls
+        document.getElementById('clear-moves').addEventListener('click', () => this.clearMovesDisplay());
+        document.getElementById('clear-debug').addEventListener('click', () => this.clearDebugInfo());
+        document.getElementById('toggle-debug').addEventListener('click', () => this.toggleDebugInfo());
+        document.getElementById('reset-cube-state').addEventListener('click', () => this.resetCubeState());
 
         // Export controls
         document.getElementById('generate-summary-btn').addEventListener('click', () => this.generateSummary());
@@ -165,20 +180,192 @@ class CubeCoachApp {
      * Handle move data from cube
      */
     handleMoveData(move) {
-        console.log('Move:', move);
+        console.log('Move detected:', move);
         
-        // Auto-start timer on first move if not running
-        if (!this.timer.getIsRunning() && !this.solveStarted && this.isAutoTimer) {
-            this.startTimer();
-            this.solveStarted = true;
-        }
+        // Display the move in the UI
+        this.displayMove(move);
         
-        // Add move to solve parser
-        if (this.solveStarted) {
-            this.solveParser.addMove(move);
-        }
+        // Update solve state based on move
+        this.updateSolveState(move);
         
         this.lastMoveTime = move.timestamp;
+    }
+
+    /**
+     * Update solve state based on cube moves
+     */
+    updateSolveState(move) {
+        const now = Date.now();
+        
+        switch (this.cubeState) {
+            case 'solved':
+                // First move from solved state starts scrambling
+                console.log('Starting scramble...');
+                this.cubeState = 'scrambled';
+                this.scrambleStartTime = now;
+                this.movesSinceScramble = 1;
+                this.scrambleInProgress = true;
+                this.updateCubeStateDisplay();
+                
+                // Clear any existing timeout
+                if (this.scrambleTimeout) {
+                    clearTimeout(this.scrambleTimeout);
+                }
+                
+                // Set timeout for scramble completion (15 seconds of no moves)
+                this.scrambleTimeout = setTimeout(() => {
+                    if (this.cubeState === 'scrambled' && this.scrambleInProgress) {
+                        console.log('Scramble completed - ready for inspection');
+                        this.scrambleInProgress = false;
+                        this.isWaitingForInspection = true;
+                        this.updateCubeStateDisplay();
+                    }
+                }, 15000); // 15 second delay
+                break;
+                
+            case 'scrambled':
+                if (this.scrambleInProgress) {
+                    // Still scrambling
+                    this.movesSinceScramble++;
+                    
+                    // Reset the scramble timeout (extend scramble time)
+                    if (this.scrambleTimeout) {
+                        clearTimeout(this.scrambleTimeout);
+                    }
+                    this.scrambleTimeout = setTimeout(() => {
+                        if (this.cubeState === 'scrambled' && this.scrambleInProgress) {
+                            console.log('Scramble completed - ready for inspection');
+                            this.scrambleInProgress = false;
+                            this.isWaitingForInspection = true;
+                            this.updateCubeStateDisplay();
+                        }
+                    }, 15000);
+                    
+                } else if (this.isWaitingForInspection) {
+                    // First move after scramble - start solve timer
+                    console.log('Starting solve timer...');
+                    this.cubeState = 'solving';
+                    this.isWaitingForInspection = false;
+                    this.solveStarted = true;
+                    this.startTimer();
+                    this.updateCubeStateDisplay();
+                    
+                    // Add move to solve parser
+                    this.solveParser.addMove(move);
+                }
+                break;
+                
+            case 'solving':
+                // Continue solving - add move to parser
+                if (this.solveStarted) {
+                    this.solveParser.addMove(move);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Update cube state display in UI
+     */
+    updateCubeStateDisplay() {
+        const stateElement = document.getElementById('cube-state');
+        if (stateElement) {
+            let stateText = '';
+            let stateClass = '';
+            
+            switch (this.cubeState) {
+                case 'solved':
+                    stateText = 'Solved - Ready for scramble';
+                    stateClass = 'state-solved';
+                    break;
+                case 'scrambled':
+                    if (this.scrambleInProgress) {
+                        stateText = `Scrambling... (${this.movesSinceScramble} moves)`;
+                        stateClass = 'state-scrambling';
+                    } else if (this.isWaitingForInspection) {
+                        stateText = 'Ready to solve - Make first move to start timer';
+                        stateClass = 'state-ready';
+                    }
+                    break;
+                case 'solving':
+                    stateText = 'Solving...';
+                    stateClass = 'state-solving';
+                    break;
+            }
+            
+            stateElement.textContent = stateText;
+            stateElement.className = `cube-state ${stateClass}`;
+        }
+    }
+
+    /**
+     * Reset cube to solved state
+     */
+    resetCubeState() {
+        console.log('Resetting cube state to solved');
+        this.cubeState = 'solved';
+        this.scrambleStartTime = null;
+        this.scrambleInProgress = false;
+        this.movesSinceScramble = 0;
+        this.isWaitingForInspection = false;
+        this.solveStarted = false;
+        
+        if (this.scrambleTimeout) {
+            clearTimeout(this.scrambleTimeout);
+            this.scrambleTimeout = null;
+        }
+        
+        // Reset timer if running
+        if (this.timer.getIsRunning()) {
+            this.resetTimer();
+        }
+        
+        // Clear solve parser
+        this.solveParser.resetSolve();
+        
+        this.updateCubeStateDisplay();
+        this.showNotification('Cube state reset to solved', 'success');
+    }
+
+    /**
+     * Handle raw data for debugging
+     */
+    handleRawData(data) {
+        // Display raw data in the debug area
+        const debugElement = document.getElementById('debug-info');
+        if (debugElement) {
+            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            debugElement.innerHTML += `<div class="debug-entry">
+                <span class="timestamp">[${timestamp}]</span>
+                <span class="hex-data">${data.hex}</span>
+                <span class="byte-data">Bytes: [${data.bytes.join(', ')}]</span>
+            </div>`;
+            debugElement.scrollTop = debugElement.scrollHeight;
+        }
+    }
+
+    /**
+     * Display detected move in the UI
+     */
+    displayMove(move) {
+        const movesContainer = document.getElementById('moves-display');
+        if (movesContainer) {
+            const moveElement = document.createElement('div');
+            moveElement.className = 'move-entry';
+            moveElement.innerHTML = `
+                <span class="move-notation">${move.move}</span>
+                <span class="move-pattern">(${move.pattern || 'unknown'})</span>
+                <span class="move-time">${new Date(move.timestamp).toLocaleTimeString()}</span>
+            `;
+            movesContainer.appendChild(moveElement);
+            movesContainer.scrollTop = movesContainer.scrollHeight;
+        }
+        
+        // Also update the last move display
+        const lastMoveElement = document.getElementById('last-move');
+        if (lastMoveElement) {
+            lastMoveElement.textContent = move.move;
+        }
     }
 
     /**
@@ -523,6 +710,40 @@ class CubeCoachApp {
     }
 
     /**
+     * Clear moves display
+     */
+    clearMovesDisplay() {
+        const movesContainer = document.getElementById('moves-display');
+        if (movesContainer) {
+            movesContainer.innerHTML = '';
+        }
+        const lastMoveElement = document.getElementById('last-move');
+        if (lastMoveElement) {
+            lastMoveElement.textContent = '--';
+        }
+    }
+
+    /**
+     * Clear debug information
+     */
+    clearDebugInfo() {
+        const debugElement = document.getElementById('debug-info');
+        if (debugElement) {
+            debugElement.innerHTML = '';
+        }
+    }
+
+    /**
+     * Toggle debug information visibility
+     */
+    toggleDebugInfo() {
+        const debugElement = document.getElementById('debug-info');
+        if (debugElement) {
+            debugElement.classList.toggle('hidden');
+        }
+    }
+
+    /**
      * Show notification to user
      */
     showNotification(message, type = 'info') {
@@ -581,4 +802,49 @@ class CubeCoachApp {
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new CubeCoachApp();
     console.log('GAN Cube Coach AI initialized');
+    
+    // Add analysis mode functions to window for easy console access
+    window.enableAnalysisMode = function() {
+        window.CUBE_ANALYSIS_MODE = true;
+        console.log('🔬 ANALYSIS MODE ENABLED - All packets will be logged in detail');
+        console.log('To disable: window.disableAnalysisMode()');
+    };
+    
+    window.disableAnalysisMode = function() {
+        window.CUBE_ANALYSIS_MODE = false;
+        console.log('Analysis mode disabled');
+    };
+    
+    // Add manual move testing for protocol analysis
+    window.startMoveTest = function() {
+        console.log('🎯 MOVE TEST MODE STARTED');
+        console.log('Instructions:');
+        console.log('1. Wait 3 seconds');
+        console.log('2. Do exactly 5 U moves (white face clockwise), 1 second apart');
+        console.log('3. Wait 2 seconds');
+        console.log('4. Do exactly 5 F moves (green face clockwise), 1 second apart');
+        console.log('5. Copy ALL console output and send to developer');
+        
+        // Start collecting data with timestamps
+        window.MOVE_TEST_MODE = true;
+        window.MOVE_TEST_START = Date.now();
+        window.MOVE_TEST_PACKETS = [];
+        
+        setTimeout(() => {
+            console.log('⏰ Start U moves NOW (5 times, 1 second apart)');
+        }, 3000);
+        
+        setTimeout(() => {
+            console.log('⏰ Start F moves NOW (5 times, 1 second apart)');
+        }, 10000);
+        
+        setTimeout(() => {
+            console.log('🎯 MOVE TEST COMPLETE');
+            console.log('Collected packets:', window.MOVE_TEST_PACKETS.length);
+            window.MOVE_TEST_MODE = false;
+        }, 17000);
+    };
+    
+    console.log('💡 TIP: Use enableAnalysisMode() in console for detailed packet analysis');
+    console.log('💡 TIP: Use startMoveTest() to begin manual move detection testing');
 });

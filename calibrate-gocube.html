@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCube Move Calibration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn.waiting {
+            background: #ff9500;
+            animation: pulse 1.5s infinite;
+        }
+        .btn.completed {
+            background: #28a745;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .calibration-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .move-card {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .move-card.waiting {
+            border-color: #ff9500;
+            background: #fff3cd;
+            box-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+        }
+        .move-card.completed {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .move-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .move-description {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .calibration-data {
+            font-size: 12px;
+            color: #666;
+            font-family: monospace;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #007AFF;
+            transition: width 0.3s ease;
+        }
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #007AFF;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 GoCube Move Calibration</h1>
+        <p>This tool will help calibrate your GoCube's accelerometer data to specific cube moves, just like configuring a game controller!</p>
+        
+        <div id="connection-status" class="status disconnected">
+            📡 Disconnected - Connect your GoCube to begin
+        </div>
+        
+        <div>
+            <button id="connect-btn" class="btn">Connect GoCube</button>
+            <button id="start-calibration-btn" class="btn" disabled>Start Calibration</button>
+            <button id="finish-step-btn" class="btn" disabled style="display: none;">✅ Finish This Step</button>
+            <button id="reset-calibration-btn" class="btn" disabled>Reset Calibration</button>
+            <button id="export-results-btn" class="btn" disabled>Export Results</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Calibration Instructions</h3>
+            <ol>
+                <li>Connect your GoCube using the "Connect GoCube" button</li>
+                <li>Click "Start Calibration" to begin the process</li>
+                <li>For each highlighted move, perform that exact move when prompted</li>
+                <li>The system will record the accelerometer signature for each move</li>
+                <li>After all moves are calibrated, you'll get a mapping table to use in the main app</li>
+            </ol>
+        </div>
+        
+        <div id="calibration-progress" style="display: none;">
+            <h3>🎯 Calibration Progress</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+            <div id="current-instruction"></div>
+        </div>
+        
+        <div class="calibration-grid" id="calibration-grid">
+            <div class="move-card" data-move="U">
+                <div class="move-name">U</div>
+                <div class="move-description">Turn top face clockwise</div>
+                <div class="calibration-data" id="data-U">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="U'">
+                <div class="move-name">U'</div>
+                <div class="move-description">Turn top face counter-clockwise</div>
+                <div class="calibration-data" id="data-U'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="R">
+                <div class="move-name">R</div>
+                <div class="move-description">Turn right face clockwise</div>
+                <div class="calibration-data" id="data-R">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="R'">
+                <div class="move-name">R'</div>
+                <div class="move-description">Turn right face counter-clockwise</div>
+                <div class="calibration-data" id="data-R'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="F">
+                <div class="move-name">F</div>
+                <div class="move-description">Turn front face clockwise</div>
+                <div class="calibration-data" id="data-F">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="F'">
+                <div class="move-name">F'</div>
+                <div class="move-description">Turn front face counter-clockwise</div>
+                <div class="calibration-data" id="data-F'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="L">
+                <div class="move-name">L</div>
+                <div class="move-description">Turn left face clockwise</div>
+                <div class="calibration-data" id="data-L">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="L'">
+                <div class="move-name">L'</div>
+                <div class="move-description">Turn left face counter-clockwise</div>
+                <div class="calibration-data" id="data-L'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="D">
+                <div class="move-name">D</div>
+                <div class="move-description">Turn bottom face clockwise</div>
+                <div class="calibration-data" id="data-D">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="D'">
+                <div class="move-name">D'</div>
+                <div class="move-description">Turn bottom face counter-clockwise</div>
+                <div class="calibration-data" id="data-D'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="B">
+                <div class="move-name">B</div>
+                <div class="move-description">Turn back face clockwise</div>
+                <div class="calibration-data" id="data-B">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="B'">
+                <div class="move-name">B'</div>
+                <div class="move-description">Turn back face counter-clockwise</div>
+                <div class="calibration-data" id="data-B'">Not calibrated</div>
+            </div>
+        </div>
+        
+        <div id="calibration-results" class="results" style="display: none;">
+            <h3>📊 Calibration Results</h3>
+            <div id="results-content"></div>
+        </div>
+        
+        <div class="log" id="log">
+🎮 GoCube Calibration Tool initialized...
+        </div>
+    </div>
+
+    <script src="gocube-bluetooth.js"></script>
+    <script>
+        class GoCubeCalibration {
+            constructor() {
+                this.bluetooth = new GoCubeBluetooth();
+                this.isConnected = false;
+                this.calibrationInProgress = false;
+                this.currentMoveIndex = 0;
+                this.calibrationData = {};
+                this.accelerometerBuffer = [];
+                
+                // Moves to calibrate in order
+                this.movesToCalibrate = ['U', "U'", 'R', "R'", 'F', "F'", 'L', "L'", 'D', "D'", 'B', "B'"];
+                
+                this.initializeElements();
+                this.initializeEventListeners();
+                this.log('🎮 GoCube Calibration Tool ready');
+            }
+            
+            initializeElements() {
+                this.connectBtn = document.getElementById('connect-btn');
+                this.startCalibrationBtn = document.getElementById('start-calibration-btn');
+                this.finishStepBtn = document.getElementById('finish-step-btn');
+                this.resetCalibrationBtn = document.getElementById('reset-calibration-btn');
+                this.exportResultsBtn = document.getElementById('export-results-btn');
+                this.connectionStatus = document.getElementById('connection-status');
+                this.logElement = document.getElementById('log');
+                this.calibrationProgress = document.getElementById('calibration-progress');
+                this.progressFill = document.getElementById('progress-fill');
+                this.currentInstruction = document.getElementById('current-instruction');
+                this.calibrationResults = document.getElementById('calibration-results');
+                this.resultsContent = document.getElementById('results-content');
+            }
+            
+            initializeEventListeners() {
+                // UI Events
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.startCalibrationBtn.addEventListener('click', () => this.startCalibration());
+                this.finishStepBtn.addEventListener('click', () => this.finishCurrentStep());
+                this.resetCalibrationBtn.addEventListener('click', () => this.resetCalibration());
+                this.exportResultsBtn.addEventListener('click', () => this.exportResults());
+                
+                // GoCube Events
+                this.bluetooth.on('connected', (data) => this.handleConnected(data));
+                this.bluetooth.on('disconnected', () => this.handleDisconnected());
+                this.bluetooth.on('error', (error) => this.handleError(error));
+                this.bluetooth.on('accelerometer', (data) => this.handleAccelerometer(data));
+                this.bluetooth.on('move', (data) => this.handleMove(data));
+            }
+            
+            async connect() {
+                try {
+                    this.log('🔄 Connecting to GoCube...');
+                    this.connectBtn.disabled = true;
+                    await this.bluetooth.connect();
+                } catch (error) {
+                    this.log(`❌ Connection failed: ${error.message}`);
+                    this.connectBtn.disabled = false;
+                }
+            }
+            
+            startCalibration() {
+                if (this.calibrationInProgress) return;
+                
+                this.calibrationInProgress = true;
+                this.currentMoveIndex = 0;
+                this.calibrationData = {};
+                this.accelerometerBuffer = [];
+                
+                this.startCalibrationBtn.disabled = true;
+                this.resetCalibrationBtn.disabled = false;
+                this.calibrationProgress.style.display = 'block';
+                
+                this.log('🎯 Starting calibration sequence...');
+                this.log('💡 For each move: 1) Perform the move, 2) Click "Finish This Step"');
+                this.startNextMoveCalibration();
+            }
+            
+            startNextMoveCalibration() {
+                if (this.currentMoveIndex >= this.movesToCalibrate.length) {
+                    this.completeCalibration();
+                    return;
+                }
+                
+                const currentMove = this.movesToCalibrate[this.currentMoveIndex];
+                const progress = (this.currentMoveIndex / this.movesToCalibrate.length) * 100;
+                
+                this.progressFill.style.width = `${progress}%`;
+                this.currentInstruction.innerHTML = `
+                    <strong>Step ${this.currentMoveIndex + 1} of ${this.movesToCalibrate.length}</strong><br>
+                    🎯 Please perform: <strong>${currentMove}</strong><br>
+                    <em>1) Do the move, 2) Click "Finish This Step" below</em>
+                `;
+                
+                // Show the finish step button
+                this.finishStepBtn.style.display = 'inline-block';
+                this.finishStepBtn.disabled = false;
+                
+                // Highlight the current move card
+                document.querySelectorAll('.move-card').forEach(card => {
+                    card.classList.remove('waiting');
+                });
+                document.querySelector(`[data-move="${currentMove}"]`).classList.add('waiting');
+                
+                this.log(`🎯 Calibrating move: ${currentMove}`);
+                this.log(`📋 1) Perform the ${currentMove} move`);
+                this.log(`📋 2) Click "Finish This Step" button`);
+                
+                // Clear buffer to capture fresh data for this step
+                this.accelerometerBuffer = [];
+                this.movesDetectedThisStep = [];
+                this.stepStartTime = Date.now();
+            }
+            
+            finishCurrentStep() {
+                const currentMove = this.movesToCalibrate[this.currentMoveIndex];
+                
+                this.log(`✅ Finishing calibration for ${currentMove}`);
+                this.log(`📊 Collected ${this.accelerometerBuffer.length} accelerometer samples`);
+                this.log(`📊 Detected ${this.movesDetectedThisStep.length} moves during this step`);
+                
+                // Store calibration data for this step
+                this.calibrationData[currentMove] = {
+                    expectedMove: currentMove,
+                    detectedMoves: [...this.movesDetectedThisStep],
+                    accelerometerData: [...this.accelerometerBuffer],
+                    stepDuration: Date.now() - this.stepStartTime,
+                    timestamp: Date.now()
+                };
+                
+                // Analyze the acceleration data for patterns
+                if (this.accelerometerBuffer.length > 0) {
+                    const analysis = this.analyzeStepData(this.accelerometerBuffer);
+                    this.calibrationData[currentMove].analysis = analysis;
+                    
+                    this.log(`📊 Primary axis: ${analysis.primaryAxis}, Max delta: ${analysis.maxDelta.toFixed(2)}`);
+                }
+                
+                // Update UI
+                const moveCard = document.querySelector(`[data-move="${currentMove}"]`);
+                moveCard.classList.remove('waiting');
+                moveCard.classList.add('completed');
+                
+                const dataElement = document.getElementById(`data-${currentMove}`);
+                const bestMove = this.movesDetectedThisStep.length > 0 ? this.movesDetectedThisStep[0] : 'None';
+                dataElement.innerHTML = `
+                    Samples: ${this.accelerometerBuffer.length}<br>
+                    Detected: ${bestMove.move || 'None'}<br>
+                    ✅ Completed
+                `;
+                
+                // Hide finish button and move to next
+                this.finishStepBtn.style.display = 'none';
+                this.currentMoveIndex++;
+                
+                // Move to next calibration after a short delay
+                setTimeout(() => {
+                    this.startNextMoveCalibration();
+                }, 500);
+            }
+            
+            analyzeStepData(accelerometerData) {
+                if (accelerometerData.length === 0) return { primaryAxis: 'none', maxDelta: 0 };
+                
+                // Find the biggest acceleration changes
+                let maxDeltaX = 0, maxDeltaY = 0, maxDeltaZ = 0;
+                
+                for (let i = 1; i < accelerometerData.length; i++) {
+                    const prev = accelerometerData[i-1];
+                    const curr = accelerometerData[i];
+                    
+                    maxDeltaX = Math.max(maxDeltaX, Math.abs(curr.x - prev.x));
+                    maxDeltaY = Math.max(maxDeltaY, Math.abs(curr.y - prev.y));
+                    maxDeltaZ = Math.max(maxDeltaZ, Math.abs(curr.z - prev.z));
+                }
+                
+                // Determine primary axis
+                let primaryAxis = 'x';
+                let maxDelta = maxDeltaX;
+                
+                if (maxDeltaY > maxDelta) {
+                    primaryAxis = 'y';
+                    maxDelta = maxDeltaY;
+                }
+                if (maxDeltaZ > maxDelta) {
+                    primaryAxis = 'z';
+                    maxDelta = maxDeltaZ;
+                }
+                
+                return {
+                    primaryAxis,
+                    maxDelta,
+                    deltaX: maxDeltaX,
+                    deltaY: maxDeltaY,
+                    deltaZ: maxDeltaZ,
+                    sampleCount: accelerometerData.length
+                };
+            }
+
+            handleConnected(data) {
+                this.isConnected = true;
+                this.connectBtn.disabled = true;
+                this.startCalibrationBtn.disabled = false;
+                this.connectionStatus.className = 'status connected';
+                this.connectionStatus.textContent = `📡 Connected to ${data.name || 'GoCube'}`;
+                this.log(`✅ Connected to ${data.name || 'GoCube'}`);
+                this.log('🎮 Ready to start calibration!');
+            }
+            
+            handleDisconnected() {
+                this.isConnected = false;
+                this.connectBtn.disabled = false;
+                this.startCalibrationBtn.disabled = true;
+                this.resetCalibrationBtn.disabled = true;
+                this.connectionStatus.className = 'status disconnected';
+                this.connectionStatus.textContent = '📡 Disconnected';
+                this.log('❌ Disconnected from GoCube');
+                
+                if (this.calibrationInProgress) {
+                    this.log('⚠️ Calibration interrupted by disconnection');
+                    this.resetCalibration();
+                }
+            }
+            
+            handleError(error) {
+                this.log(`❌ Error: ${error}`);
+            }
+            
+            handleAccelerometer(data) {
+                if (!this.calibrationInProgress) return;
+                
+                // Always buffer accelerometer data during calibration
+                this.accelerometerBuffer.push({
+                    x: data.x,
+                    y: data.y,
+                    z: data.z,
+                    timestamp: Date.now(),
+                    magnitude: data.magnitude || Math.sqrt(data.x*data.x + data.y*data.y + data.z*data.z)
+                });
+                
+                // Keep only last 5 seconds of data to prevent memory issues
+                const cutoff = Date.now() - 5000;
+                this.accelerometerBuffer = this.accelerometerBuffer.filter(d => d.timestamp > cutoff);
+                
+                // Log occasional data to show activity
+                if (this.accelerometerBuffer.length % 20 === 1) {
+                    this.log(`📊 Collecting data... ${this.accelerometerBuffer.length} samples (x=${data.x.toFixed(2)}, y=${data.y.toFixed(2)}, z=${data.z.toFixed(2)})`);
+                }
+            }
+            
+            handleMove(data) {
+                if (!this.calibrationInProgress) return;
+                
+                // Store all detected moves during this calibration step
+                if (!this.movesDetectedThisStep) {
+                    this.movesDetectedThisStep = [];
+                }
+                
+                this.movesDetectedThisStep.push({
+                    move: data.move,
+                    confidence: data.confidence,
+                    analysis: data.analysis,
+                    timestamp: Date.now()
+                });
+                
+                this.log(`🎯 Move detected: ${data.move} (confidence: ${(data.confidence * 100).toFixed(1)}%)`);
+                this.log(`📊 Analysis: axis=${data.analysis.primaryAxis}, delta=${data.analysis.delta}`);
+            }
+            
+            completeCalibration() {
+                this.calibrationInProgress = false;
+                this.progressFill.style.width = '100%';
+                this.currentInstruction.innerHTML = '<strong>✅ Calibration Complete!</strong>';
+                
+                this.startCalibrationBtn.disabled = false;
+                this.exportResultsBtn.disabled = false;
+                
+                this.log('🎉 Calibration completed!');
+                this.displayResults();
+            }
+            
+            displayResults() {
+                this.calibrationResults.style.display = 'block';
+                
+                let resultsHTML = '<h4>Move Mapping Results:</h4>';
+                
+                // Analyze the results to create axis mappings
+                const axisMappings = {};
+                
+                for (const [expectedMove, data] of Object.entries(this.calibrationData)) {
+                    const axis = data.analysis.primaryAxis;
+                    const direction = data.analysis.direction;
+                    const key = `${axis}_${direction}`;
+                    
+                    if (!axisMappings[key]) {
+                        axisMappings[key] = [];
+                    }
+                    axisMappings[key].push(expectedMove);
+                    
+                    resultsHTML += `
+                        <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                            <strong>${expectedMove}</strong> → Detected as: ${data.detectedMove}<br>
+                            Primary axis: ${axis}, Direction: ${direction}, Delta: ${data.analysis.delta}<br>
+                            Confidence: ${(data.confidence * 100).toFixed(1)}%
+                        </div>
+                    `;
+                }
+                
+                resultsHTML += '<h4>Suggested Axis Mapping:</h4>';
+                resultsHTML += '<pre>' + JSON.stringify(axisMappings, null, 2) + '</pre>';
+                
+                this.resultsContent.innerHTML = resultsHTML;
+                
+                this.log('📊 Results displayed - use Export Results to get the mapping code');
+            }
+            
+            resetCalibration() {
+                this.calibrationInProgress = false;
+                this.currentMoveIndex = 0;
+                this.calibrationData = {};
+                this.movesDetectedThisStep = [];
+                
+                this.startCalibrationBtn.disabled = false;
+                this.resetCalibrationBtn.disabled = true;
+                this.exportResultsBtn.disabled = true;
+                this.finishStepBtn.style.display = 'none';
+                this.calibrationProgress.style.display = 'none';
+                this.calibrationResults.style.display = 'none';
+                
+                // Reset all move cards
+                document.querySelectorAll('.move-card').forEach(card => {
+                    card.classList.remove('waiting', 'completed');
+                    const move = card.dataset.move;
+                    document.getElementById(`data-${move}`).textContent = 'Not calibrated';
+                });
+                
+                this.log('🔄 Calibration reset');
+            }
+            
+            exportResults() {
+                const mappingCode = this.generateMappingCode();
+                
+                // Create downloadable file
+                const blob = new Blob([mappingCode], { type: 'text/javascript' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'gocube-calibration-results.js';
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                // Also copy to clipboard
+                navigator.clipboard.writeText(mappingCode).then(() => {
+                    this.log('📋 Calibration results copied to clipboard!');
+                });
+                
+                this.log('💾 Calibration results exported as file');
+            }
+            
+            generateMappingCode() {
+                let code = `// GoCube Calibration Results - Generated ${new Date().toISOString()}\n\n`;
+                
+                code += `// Raw calibration data:\n`;
+                code += `const calibrationData = ${JSON.stringify(this.calibrationData, null, 2)};\n\n`;
+                
+                code += `// Suggested move mapping function:\n`;
+                code += `function mapGoCubeMove(analysis) {\n`;
+                code += `    const { primaryAxis, direction, delta } = analysis;\n`;
+                code += `    \n`;
+                
+                // Generate mapping logic based on calibration results
+                const axisMap = {};
+                for (const [expectedMove, data] of Object.entries(this.calibrationData)) {
+                    const key = `${data.analysis.primaryAxis}_${data.analysis.direction}`;
+                    axisMap[key] = expectedMove;
+                }
+                
+                code += `    // Axis to move mapping (from calibration)\n`;
+                code += `    const axisMap = ${JSON.stringify(axisMap, null, 4)};\n`;
+                code += `    \n`;
+                code += `    const key = \`\${primaryAxis}_\${direction}\`;\n`;
+                code += `    return axisMap[key] || 'Move';\n`;
+                code += `}\n\n`;
+                
+                code += `// Usage: Replace the analyzeMovePattern function in gocube-bluetooth.js with this logic`;
+                
+                return code;
+            }
+            
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logMessage = `[${timestamp}] ${message}\n`;
+                this.logElement.textContent += logMessage;
+                this.logElement.scrollTop = this.logElement.scrollHeight;
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.goCubeCalibration = new GoCubeCalibration();
+        });
+    </script>
+</body>
+</html>

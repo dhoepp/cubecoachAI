@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCube Complete Move Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .status.connected { background: rgba(76, 175, 80, 0.3); }
+        .status.disconnected { background: rgba(244, 67, 54, 0.3); }
+        .status.connecting { background: rgba(255, 193, 7, 0.3); }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px 0 rgba(31, 38, 135, 0.4);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px 0 rgba(31, 38, 135, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .move-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .move-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px 0 rgba(31, 38, 135, 0.4);
+        }
+
+        .move-name {
+            font-size: 2em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #4ecdc4;
+        }
+
+        .move-status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .move-status.waiting {
+            background: rgba(255, 193, 7, 0.3);
+            color: #fff3e0;
+        }
+
+        .move-status.detected {
+            background: rgba(76, 175, 80, 0.3);
+            color: #c8e6c9;
+        }
+
+        .move-status.wrong {
+            background: rgba(244, 67, 54, 0.3);
+            color: #ffcdd2;
+        }
+
+        .move-details {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .score-board {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .score {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .instructions {
+            background: rgba(255, 193, 7, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        .log {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: 20px;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .log-info { color: #e3f2fd; }
+        .log-success { color: #c8e6c9; }
+        .log-warning { color: #fff3e0; }
+        .log-error { color: #ffcdd2; }
+        .log-move { 
+            color: #4ecdc4; 
+            font-weight: bold;
+            background: rgba(78, 205, 196, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 GoCube Complete Move Validation</h1>
+        
+        <div id="status" class="status disconnected">
+            📱 Click "Connect to GoCube" to begin testing
+        </div>
+
+        <div class="button-group">
+            <button id="connectBtn">🔗 Connect to GoCube</button>
+            <button id="disconnectBtn" disabled>❌ Disconnect</button>
+            <button id="resetBtn" disabled>🔄 Reset Test</button>
+            <button id="clearLogBtn">🗑️ Clear Log</button>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>Connect to your GoCube</li>
+                <li>Perform each move shown in the cards below</li>
+                <li>Each move will be validated against the expected mapping</li>
+                <li>Green = Correct detection, Red = Wrong detection, Yellow = Waiting</li>
+                <li>Try to get 100% accuracy on all 12 moves!</li>
+            </ol>
+        </div>
+
+        <div class="score-board">
+            <h3>📊 Test Results</h3>
+            <div class="score">
+                <span id="correctCount">0</span> / <span id="totalMoves">12</span> Correct
+            </div>
+            <div id="accuracy">0% Accuracy</div>
+        </div>
+
+        <div class="test-grid" id="moveGrid">
+            <!-- Move cards will be generated here -->
+        </div>
+
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="gocube-bluetooth.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const moveGrid = document.getElementById('moveGrid');
+        const correctCount = document.getElementById('correctCount');
+        const totalMoves = document.getElementById('totalMoves');
+        const accuracy = document.getElementById('accuracy');
+
+        let goCube = null;
+        let isConnected = false;
+        let moveResults = {};
+
+        // All 12 basic cube moves
+        const testMoves = [
+            { move: "U", face: "U", name: "Up", color: "#4ecdc4" },
+            { move: "U'", face: "U", name: "Up'", color: "#4ecdc4" },
+            { move: "R", face: "R", name: "Right", color: "#ff6b6b" },
+            { move: "R'", face: "R", name: "Right'", color: "#ff6b6b" },
+            { move: "F", face: "F", name: "Front", color: "#45b7d1" },
+            { move: "F'", face: "F", name: "Front'", color: "#45b7d1" },
+            { move: "L", face: "L", name: "Left", color: "#96ceb4" },
+            { move: "L'", face: "L", name: "Left'", color: "#96ceb4" },
+            { move: "D", face: "D", name: "Down", color: "#feca57" },
+            { move: "D'", face: "D", name: "Down'", color: "#feca57" },
+            { move: "B", face: "B", name: "Back", color: "#ff9ff3" },
+            { move: "B'", face: "B", name: "Back'", color: "#ff9ff3" }
+        ];
+
+        // Initialize move results
+        testMoves.forEach(move => {
+            moveResults[move.move] = {
+                expected: move.move,
+                detected: null,
+                status: 'waiting',
+                timestamp: null,
+                rawData: null
+            };
+        });
+
+        // Log functions
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateStatus(message, className) {
+            status.textContent = message;
+            status.className = `status ${className}`;
+        }
+
+        function updateScore() {
+            const correct = Object.values(moveResults).filter(r => r.status === 'detected').length;
+            const total = testMoves.length;
+            const accuracyPercent = total > 0 ? Math.round((correct / total) * 100) : 0;
+            
+            correctCount.textContent = correct;
+            totalMoves.textContent = total;
+            accuracy.textContent = `${accuracyPercent}% Accuracy`;
+        }
+
+        function createMoveCards() {
+            moveGrid.innerHTML = '';
+            
+            testMoves.forEach(move => {
+                const card = document.createElement('div');
+                card.className = 'move-card';
+                card.id = `card-${move.move}`;
+                
+                card.innerHTML = `
+                    <div class="move-name" style="color: ${move.color}">${move.move}</div>
+                    <div class="move-status waiting" id="status-${move.move}">
+                        Waiting for move...
+                    </div>
+                    <div class="move-details" id="details-${move.move}">
+                        Expected: ${move.move}<br>
+                        Detected: -<br>
+                        Status: Waiting
+                    </div>
+                `;
+                
+                moveGrid.appendChild(card);
+            });
+        }
+
+        function updateMoveCard(moveId, result) {
+            const statusEl = document.getElementById(`status-${moveId}`);
+            const detailsEl = document.getElementById(`details-${moveId}`);
+            
+            if (result.status === 'detected') {
+                statusEl.className = 'move-status detected';
+                statusEl.textContent = `✅ Detected: ${result.detected}`;
+            } else if (result.status === 'wrong') {
+                statusEl.className = 'move-status wrong';
+                statusEl.textContent = `❌ Wrong: ${result.detected}`;
+            } else {
+                statusEl.className = 'move-status waiting';
+                statusEl.textContent = 'Waiting for move...';
+            }
+            
+            detailsEl.innerHTML = `
+                Expected: ${result.expected}<br>
+                Detected: ${result.detected || '-'}<br>
+                Status: ${result.status}
+                ${result.rawData ? `<br>Raw: ${result.rawData}` : ''}
+            `;
+        }
+
+        // GoCube event handlers
+        function setupGoCubeEvents() {
+            goCube.on('connected', (data) => {
+                isConnected = true;
+                updateStatus(`✅ Connected to ${data.name}`, 'connected');
+                addLog(`Connected to GoCube: ${data.name}`, 'success');
+                resetBtn.disabled = false;
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            });
+
+            goCube.on('disconnected', () => {
+                isConnected = false;
+                updateStatus('📱 Disconnected from GoCube', 'disconnected');
+                addLog('Disconnected from GoCube', 'warning');
+                resetBtn.disabled = true;
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            });
+
+            goCube.on('move', (moveData) => {
+                const detectedMove = moveData.move;
+                addLog(`🎯 Move detected: ${detectedMove}`, 'move');
+                
+                // Check if this matches any expected move
+                let foundMatch = false;
+                for (const expectedMove of testMoves) {
+                    if (moveResults[expectedMove.move].status === 'waiting') {
+                        if (detectedMove === expectedMove.move) {
+                            // Correct detection
+                            moveResults[expectedMove.move] = {
+                                expected: expectedMove.move,
+                                detected: detectedMove,
+                                status: 'detected',
+                                timestamp: Date.now(),
+                                rawData: `0x${moveData.moveCode?.toString(16) || '??'}`
+                            };
+                            addLog(`✅ Correct: ${expectedMove.move} detected as ${detectedMove}`, 'success');
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!foundMatch) {
+                    // Check if it matches any expected move but was detected wrong
+                    for (const expectedMove of testMoves) {
+                        if (moveResults[expectedMove.move].status === 'waiting') {
+                            // For now, mark the first waiting move as wrong
+                            moveResults[expectedMove.move] = {
+                                expected: expectedMove.move,
+                                detected: detectedMove,
+                                status: 'wrong',
+                                timestamp: Date.now(),
+                                rawData: `0x${moveData.moveCode?.toString(16) || '??'}`
+                            };
+                            addLog(`❌ Wrong: Expected ${expectedMove.move}, got ${detectedMove}`, 'error');
+                            break;
+                        }
+                    }
+                }
+                
+                // Update UI
+                Object.keys(moveResults).forEach(moveId => {
+                    updateMoveCard(moveId, moveResults[moveId]);
+                });
+                updateScore();
+            });
+
+            goCube.on('error', (error) => {
+                addLog(`❌ Error: ${error}`, 'error');
+            });
+        }
+
+        function resetTest() {
+            testMoves.forEach(move => {
+                moveResults[move.move] = {
+                    expected: move.move,
+                    detected: null,
+                    status: 'waiting',
+                    timestamp: null,
+                    rawData: null
+                };
+                updateMoveCard(move.move, moveResults[move.move]);
+            });
+            updateScore();
+            addLog('🔄 Test reset - ready for new validation', 'info');
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('🔄 Connecting to GoCube...', 'connecting');
+                addLog('Requesting GoCube connection...', 'info');
+                
+                goCube = new GoCubeBluetooth();
+                setupGoCubeEvents();
+                await goCube.connect();
+            } catch (error) {
+                updateStatus('❌ Connection failed', 'disconnected');
+                addLog(`Connection failed: ${error.message}`, 'error');
+            }
+        });
+
+        disconnectBtn.addEventListener('click', async () => {
+            if (goCube && isConnected) {
+                await goCube.disconnect();
+            }
+        });
+
+        resetBtn.addEventListener('click', resetTest);
+
+        clearLogBtn.addEventListener('click', () => {
+            log.innerHTML = '';
+            addLog('Log cleared', 'info');
+        });
+
+        // Initialize
+        createMoveCards();
+        updateScore();
+        addLog('🎲 GoCube Complete Move Validation Test initialized', 'info');
+        addLog('💡 Connect to your GoCube and start performing moves!', 'info');
+    </script>
+</body>
+</html>

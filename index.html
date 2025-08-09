@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GAN Cube Coach AI</title>
+    <title>GoCube Coach AI</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>GAN Cube Coach AI</h1>
-            <p>Connect your GAN 356i Carry cube for detailed solve analysis</p>
+            <h1>GoCube Coach AI</h1>
+            <p>Connect your GoCube for detailed solve analysis with real-time data</p>
         </header>
 
         <main>
@@ -44,6 +44,28 @@
                 </div>
                 <div class="solve-counter">
                     <span>Solve #<span id="solve-number">1</span></span>
+                </div>
+            </section>
+
+            <!-- Live Moves Panel -->
+            <section class="live-moves-panel">
+                <h2>Live Cube Data</h2>
+                <div class="cube-state-container">
+                    <div id="cube-state" class="cube-state state-solved">Solved - Ready for scramble</div>
+                    <button id="reset-cube-state" class="btn secondary small">Reset to Solved</button>
+                </div>
+                <div class="current-move">
+                    <label>Last Move: <span id="last-move">--</span></label>
+                </div>
+                <div class="moves-display-container">
+                    <h3>Move History</h3>
+                    <div id="moves-display" class="moves-display"></div>
+                    <button id="clear-moves" class="btn secondary small">Clear History</button>
+                </div>
+                <div class="debug-container">
+                    <h3>Debug Data <button id="toggle-debug" class="btn secondary small">Show/Hide</button></h3>
+                    <div id="debug-info" class="debug-info hidden"></div>
+                    <button id="clear-debug" class="btn secondary small">Clear Debug</button>
                 </div>
             </section>
 
@@ -194,7 +216,7 @@
         </main>
     </div>
 
-    <script src="gan-bluetooth.js"></script>
+    <script src="gocube-bluetooth.js"></script>
     <script src="solve-parser.js"></script>
     <script src="timer.js"></script>
     <script src="app.js"></script>

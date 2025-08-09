@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCube Move Mapping Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .status.connected { background: rgba(76, 175, 80, 0.3); }
+        .status.disconnected { background: rgba(244, 67, 54, 0.3); }
+        .status.connecting { background: rgba(255, 193, 7, 0.3); }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px 0 rgba(31, 38, 135, 0.4);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px 0 rgba(31, 38, 135, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .move-test {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .move-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4ecdc4;
+            margin-bottom: 10px;
+        }
+
+        .move-result {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+
+        .mapping-results {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .log {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: 20px;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .log-info { color: #e3f2fd; }
+        .log-success { color: #c8e6c9; }
+        .log-warning { color: #fff3e0; }
+        .log-error { color: #ffcdd2; }
+        .log-move { 
+            color: #4ecdc4; 
+            font-weight: bold;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .instructions {
+            background: rgba(255, 193, 7, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 GoCube Move Mapping Discovery</h1>
+        
+        <div id="status" class="status disconnected">
+            📱 Click "Connect to GoCube" to begin
+        </div>
+
+        <div class="button-group">
+            <button id="connectBtn">🔗 Connect to GoCube</button>
+            <button id="disconnectBtn" disabled>❌ Disconnect</button>
+            <button id="clearLogBtn">🗑️ Clear Log</button>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>Connect to your GoCube first</li>
+                <li>For each face below, click "Test [Face]" button</li>
+                <li>Make the specified move on your cube (slowly and deliberately)</li>
+                <li>The system will capture the move code and direction</li>
+                <li>Continue for all faces to build the complete mapping</li>
+            </ol>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">🔺 U Face (Up)</div>
+            <button id="testU" disabled>Test U Move</button>
+            <button id="testUprime" disabled>Test U' Move</button>
+            <div id="resultU" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">➡️ R Face (Right)</div>
+            <button id="testR" disabled>Test R Move</button>
+            <button id="testRprime" disabled>Test R' Move</button>
+            <div id="resultR" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">⬆️ F Face (Front)</div>
+            <button id="testF" disabled>Test F Move</button>
+            <button id="testFprime" disabled>Test F' Move</button>
+            <div id="resultF" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">⬅️ L Face (Left)</div>
+            <button id="testL" disabled>Test L Move</button>
+            <button id="testLprime" disabled>Test L' Move</button>
+            <div id="resultL" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">🔻 D Face (Down)</div>
+            <button id="testD" disabled>Test D Move</button>
+            <button id="testDprime" disabled>Test D' Move</button>
+            <div id="resultD" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="move-test">
+            <div class="move-name">⬇️ B Face (Back)</div>
+            <button id="testB" disabled>Test B Move</button>
+            <button id="testBprime" disabled>Test B' Move</button>
+            <div id="resultB" class="move-result">Waiting for test...</div>
+        </div>
+
+        <div class="mapping-results">
+            <h3>📊 Discovered Move Mapping:</h3>
+            <div id="mappingTable" style="font-family: 'Courier New', monospace;">
+                <div>// Move code mapping (to be updated):</div>
+                <div>const moveMapping = {</div>
+                <div id="mappingContent">    // Will be populated as moves are discovered...</div>
+                <div>};</div>
+            </div>
+        </div>
+
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="gocube-bluetooth.js"></script>
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const mappingContent = document.getElementById('mappingContent');
+
+        let goCube = null;
+        let isConnected = false;
+        let discoveredMappings = {};
+        let currentTest = null;
+        let testTimeout = null;
+
+        // Log functions
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateStatus(message, className) {
+            status.textContent = message;
+            status.className = `status ${className}`;
+        }
+
+        function updateMapping() {
+            let mappingText = '';
+            Object.keys(discoveredMappings).forEach(moveCode => {
+                const directions = discoveredMappings[moveCode];
+                mappingText += `    0x${moveCode}: { `;
+                Object.keys(directions).forEach(direction => {
+                    const move = directions[direction];
+                    mappingText += `0x${direction}: "${move}", `;
+                });
+                mappingText += `default: "?2" },\n`;
+            });
+            
+            if (mappingText) {
+                mappingContent.innerHTML = mappingText.split('\n').map(line => 
+                    `<div style="margin-left: 20px;">${line}</div>`
+                ).join('');
+            }
+        }
+
+        // GoCube event handlers
+        function setupGoCubeEvents() {
+            goCube.on('connected', (data) => {
+                isConnected = true;
+                updateStatus(`✅ Connected to ${data.name}`, 'connected');
+                addLog(`Connected to GoCube: ${data.name}`, 'success');
+                enableTestButtons();
+            });
+
+            goCube.on('disconnected', () => {
+                isConnected = false;
+                updateStatus('📱 Disconnected from GoCube', 'disconnected');
+                addLog('Disconnected from GoCube', 'warning');
+                disableTestButtons();
+            });
+
+            goCube.on('move', (moveData) => {
+                addLog(`🎯 Move detected: ${moveData.move} (confidence: ${(moveData.confidence * 100).toFixed(1)}%)`, 'move');
+                
+                if (currentTest && moveData.moveCode !== undefined) {
+                    const moveCode = moveData.moveCode.toString(16).padStart(2, '0');
+                    const direction = moveData.direction.toString(16).padStart(2, '0');
+                    
+                    // Store the mapping
+                    if (!discoveredMappings[moveCode]) {
+                        discoveredMappings[moveCode] = {};
+                    }
+                    discoveredMappings[moveCode][direction] = currentTest.expectedMove;
+                    
+                    // Update the result display
+                    const resultDiv = document.getElementById(`result${currentTest.face}`);
+                    const existingResults = resultDiv.innerHTML.includes('moveCode') ? 
+                        resultDiv.innerHTML + '<br>' : '';
+                    
+                    resultDiv.innerHTML = existingResults + 
+                        `✅ ${currentTest.expectedMove}: moveCode=0x${moveCode}, direction=0x${direction}`;
+                    
+                    addLog(`📋 Mapped ${currentTest.expectedMove} → moveCode=0x${moveCode}, direction=0x${direction}`, 'success');
+                    updateMapping();
+                    
+                    // Clear the test
+                    currentTest = null;
+                    if (testTimeout) {
+                        clearTimeout(testTimeout);
+                        testTimeout = null;
+                    }
+                }
+            });
+
+            goCube.on('rawData', (data) => {
+                // Only log move packets to reduce noise
+                if (data.bytes.length === 8 && data.bytes[0] === 0x2a && data.bytes[2] === 0x01) {
+                    addLog(`📡 Move packet: ${data.hex}`);
+                }
+            });
+
+            goCube.on('error', (error) => {
+                addLog(`❌ Error: ${error}`, 'error');
+            });
+        }
+
+        function enableTestButtons() {
+            const faces = ['U', 'R', 'F', 'L', 'D', 'B'];
+            faces.forEach(face => {
+                document.getElementById(`test${face}`).disabled = false;
+                document.getElementById(`test${face}prime`).disabled = false;
+            });
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+        }
+
+        function disableTestButtons() {
+            const faces = ['U', 'R', 'F', 'L', 'D', 'B'];
+            faces.forEach(face => {
+                document.getElementById(`test${face}`).disabled = true;
+                document.getElementById(`test${face}prime`).disabled = true;
+            });
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        }
+
+        function startMoveTest(face, move, expectedMove) {
+            if (!isConnected) {
+                addLog('❌ Not connected to GoCube', 'error');
+                return;
+            }
+
+            currentTest = { face, move, expectedMove };
+            addLog(`🧪 Starting test for ${expectedMove} move...`, 'info');
+            addLog(`📋 Please perform ${expectedMove} move on your cube now`, 'warning');
+            
+            // Set timeout for test
+            testTimeout = setTimeout(() => {
+                if (currentTest) {
+                    addLog(`⏰ Test timeout for ${expectedMove} - no move detected`, 'warning');
+                    currentTest = null;
+                }
+            }, 10000); // 10 second timeout
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('🔄 Connecting to GoCube...', 'connecting');
+                addLog('Requesting GoCube connection...', 'info');
+                
+                goCube = new GoCubeBluetooth();
+                setupGoCubeEvents();
+                await goCube.connect();
+            } catch (error) {
+                updateStatus('❌ Connection failed', 'disconnected');
+                addLog(`Connection failed: ${error.message}`, 'error');
+            }
+        });
+
+        disconnectBtn.addEventListener('click', async () => {
+            if (goCube && isConnected) {
+                await goCube.disconnect();
+            }
+        });
+
+        clearLogBtn.addEventListener('click', () => {
+            log.innerHTML = '';
+            addLog('Log cleared', 'info');
+        });
+
+        // Setup move test buttons
+        const moveTests = [
+            { face: 'U', move: 'U', expectedMove: 'U' },
+            { face: 'U', move: 'Uprime', expectedMove: "U'" },
+            { face: 'R', move: 'R', expectedMove: 'R' },
+            { face: 'R', move: 'Rprime', expectedMove: "R'" },
+            { face: 'F', move: 'F', expectedMove: 'F' },
+            { face: 'F', move: 'Fprime', expectedMove: "F'" },
+            { face: 'L', move: 'L', expectedMove: 'L' },
+            { face: 'L', move: 'Lprime', expectedMove: "L'" },
+            { face: 'D', move: 'D', expectedMove: 'D' },
+            { face: 'D', move: 'Dprime', expectedMove: "D'" },
+            { face: 'B', move: 'B', expectedMove: 'B' },
+            { face: 'B', move: 'Bprime', expectedMove: "B'" }
+        ];
+
+        moveTests.forEach(test => {
+            const button = document.getElementById(`test${test.move}`);
+            if (button) {
+                button.addEventListener('click', () => {
+                    startMoveTest(test.face, test.move, test.expectedMove);
+                });
+            }
+        });
+
+        // Initialize
+        addLog('🎲 GoCube Move Mapping Test initialized', 'info');
+        addLog('💡 Connect to your GoCube to begin mapping discovery', 'info');
+    </script>
+</body>
+</html>
