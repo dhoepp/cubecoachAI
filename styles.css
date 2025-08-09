@@ -1,0 +1,430 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    color: white;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    font-weight: 300;
+    margin-bottom: 10px;
+}
+
+header p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+/* Main Layout */
+main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    grid-template-areas: 
+        "connection timer"
+        "solve-data solve-data"
+        "export export";
+}
+
+section {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    color: #2c3e50;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+/* Connection Panel */
+.connection-panel {
+    grid-area: connection;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #dc3545;
+    transition: background-color 0.3s ease;
+}
+
+.status-indicator.connected {
+    background: #28a745;
+}
+
+.connection-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.cube-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+}
+
+.cube-info.hidden {
+    display: none;
+}
+
+.cube-info p {
+    margin-bottom: 5px;
+}
+
+/* Timer Panel */
+.timer-panel {
+    grid-area: timer;
+}
+
+.timer-display {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#timer {
+    font-size: 3rem;
+    font-weight: 300;
+    color: #2c3e50;
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.timer-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.solve-counter {
+    text-align: center;
+    font-weight: 500;
+    color: #6c757d;
+}
+
+/* Solve Data Panel */
+.solve-data-panel {
+    grid-area: solve-data;
+}
+
+.solve-phases {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.phase-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.phase-card h3 {
+    color: #495057;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.phase-data {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.f2l-pairs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.pair {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.pair h4 {
+    color: #6c757d;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+.scramble-section {
+    margin-bottom: 25px;
+}
+
+.scramble-section h3 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+.total-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat label {
+    display: block;
+    font-weight: 500;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.stat span {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Export Panel */
+.export-panel {
+    grid-area: export;
+}
+
+.export-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.export-preview h3 {
+    color: #495057;
+    margin-bottom: 10px;
+}
+
+/* Form Elements */
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+}
+
+input, textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.time-input {
+    max-width: 80px;
+}
+
+.moves-input {
+    max-width: 60px;
+}
+
+.algorithm-input {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.85rem;
+}
+
+.scramble-input {
+    min-height: 80px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+#export-text {
+    min-height: 200px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+    resize: vertical;
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn.primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn.primary:hover {
+    background: #5a6fd8;
+}
+
+.btn.secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn.secondary:hover {
+    background: #5a6268;
+}
+
+.btn.danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn.danger:hover {
+    background: #c82333;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    main {
+        grid-template-columns: 1fr;
+        grid-template-areas: 
+            "connection"
+            "timer"
+            "solve-data"
+            "export";
+    }
+    
+    .solve-phases {
+        grid-template-columns: 1fr;
+    }
+    
+    .f2l-pairs {
+        grid-template-columns: 1fr;
+    }
+    
+    .total-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .connection-controls,
+    .timer-controls,
+    .export-controls {
+        flex-direction: column;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    #timer {
+        font-size: 2.5rem;
+    }
+}
+
+/* Animation for timer */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.timer-running #timer {
+    animation: pulse 1s ease-in-out infinite;
+    color: #dc3545;
+}
+
+/* Loading spinner */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spinner {
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #667eea;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-left: 10px;
+}

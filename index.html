@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAN Cube Coach AI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GAN Cube Coach AI</h1>
+            <p>Connect your GAN 356i Carry cube for detailed solve analysis</p>
+        </header>
+
+        <main>
+            <!-- Connection Panel -->
+            <section class="connection-panel">
+                <h2>Cube Connection</h2>
+                <div class="connection-status">
+                    <span id="connection-status">Disconnected</span>
+                    <div class="status-indicator" id="status-indicator"></div>
+                </div>
+                <div class="connection-controls">
+                    <button id="connect-btn" class="btn primary">Connect Cube</button>
+                    <button id="disconnect-btn" class="btn secondary" disabled>Disconnect</button>
+                </div>
+                <div id="cube-info" class="cube-info hidden">
+                    <p><strong>Device:</strong> <span id="device-name"></span></p>
+                    <p><strong>Battery:</strong> <span id="battery-level">--</span>%</p>
+                </div>
+            </section>
+
+            <!-- Timer Panel -->
+            <section class="timer-panel">
+                <h2>Solve Timer</h2>
+                <div class="timer-display">
+                    <span id="timer">00:00.000</span>
+                </div>
+                <div class="timer-controls">
+                    <button id="start-timer-btn" class="btn primary">Start</button>
+                    <button id="stop-timer-btn" class="btn danger" disabled>Stop</button>
+                    <button id="reset-timer-btn" class="btn secondary">Reset</button>
+                </div>
+                <div class="solve-counter">
+                    <span>Solve #<span id="solve-number">1</span></span>
+                </div>
+            </section>
+
+            <!-- Solve Data Panel -->
+            <section class="solve-data-panel">
+                <h2>Current Solve Data</h2>
+                <div class="solve-phases">
+                    <!-- Cross Phase -->
+                    <div class="phase-card">
+                        <h3>Cross</h3>
+                        <div class="phase-data">
+                            <label>
+                                Time: 
+                                <input type="text" id="cross-time" placeholder="0.00s" class="time-input">
+                            </label>
+                            <label>
+                                Moves: 
+                                <input type="number" id="cross-moves" placeholder="8" class="moves-input">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- F2L Phase -->
+                    <div class="phase-card">
+                        <h3>F2L</h3>
+                        <div class="f2l-pairs">
+                            <div class="pair" data-pair="1">
+                                <h4>Pair 1</h4>
+                                <label>
+                                    Time: 
+                                    <input type="text" id="f2l-1-time" placeholder="0.00s" class="time-input">
+                                </label>
+                                <label>
+                                    Moves: 
+                                    <input type="number" id="f2l-1-moves" placeholder="0" class="moves-input">
+                                </label>
+                            </div>
+                            <div class="pair" data-pair="2">
+                                <h4>Pair 2</h4>
+                                <label>
+                                    Time: 
+                                    <input type="text" id="f2l-2-time" placeholder="0.00s" class="time-input">
+                                </label>
+                                <label>
+                                    Moves: 
+                                    <input type="number" id="f2l-2-moves" placeholder="0" class="moves-input">
+                                </label>
+                            </div>
+                            <div class="pair" data-pair="3">
+                                <h4>Pair 3</h4>
+                                <label>
+                                    Time: 
+                                    <input type="text" id="f2l-3-time" placeholder="0.00s" class="time-input">
+                                </label>
+                                <label>
+                                    Moves: 
+                                    <input type="number" id="f2l-3-moves" placeholder="0" class="moves-input">
+                                </label>
+                            </div>
+                            <div class="pair" data-pair="4">
+                                <h4>Pair 4</h4>
+                                <label>
+                                    Time: 
+                                    <input type="text" id="f2l-4-time" placeholder="0.00s" class="time-input">
+                                </label>
+                                <label>
+                                    Moves: 
+                                    <input type="number" id="f2l-4-moves" placeholder="0" class="moves-input">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OLL Phase -->
+                    <div class="phase-card">
+                        <h3>OLL</h3>
+                        <div class="phase-data">
+                            <label>
+                                Algorithm: 
+                                <input type="text" id="oll-algorithm" placeholder="R U R' U R U2 R'" class="algorithm-input">
+                            </label>
+                            <label>
+                                Time: 
+                                <input type="text" id="oll-time" placeholder="0.00s" class="time-input">
+                            </label>
+                            <label>
+                                Moves: 
+                                <input type="number" id="oll-moves" placeholder="0" class="moves-input">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- PLL Phase -->
+                    <div class="phase-card">
+                        <h3>PLL</h3>
+                        <div class="phase-data">
+                            <label>
+                                Algorithm: 
+                                <input type="text" id="pll-algorithm" placeholder="R U R' F' R U R' U' R' F R2 U' R'" class="algorithm-input">
+                            </label>
+                            <label>
+                                Time: 
+                                <input type="text" id="pll-time" placeholder="0.00s" class="time-input">
+                            </label>
+                            <label>
+                                Moves: 
+                                <input type="number" id="pll-moves" placeholder="0" class="moves-input">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scramble -->
+                <div class="scramble-section">
+                    <h3>Scramble</h3>
+                    <textarea id="scramble" placeholder="D2 R U2 R' D2 R U2 R' D2 R U2 R' D2 R U2 R'" class="scramble-input"></textarea>
+                </div>
+
+                <!-- Total Stats -->
+                <div class="total-stats">
+                    <div class="stat">
+                        <label>Total Time:</label>
+                        <span id="total-time">00:00.000</span>
+                    </div>
+                    <div class="stat">
+                        <label>Total Moves:</label>
+                        <span id="total-moves">0</span>
+                    </div>
+                    <div class="stat">
+                        <label>TPS:</label>
+                        <span id="tps">0.00</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Export Panel -->
+            <section class="export-panel">
+                <h2>Export for Analysis</h2>
+                <div class="export-controls">
+                    <button id="generate-summary-btn" class="btn primary">Generate Summary</button>
+                    <button id="copy-summary-btn" class="btn secondary">Copy to Clipboard</button>
+                </div>
+                <div class="export-preview">
+                    <h3>Analysis Summary</h3>
+                    <textarea id="export-text" readonly placeholder="Click 'Generate Summary' to create analysis text..."></textarea>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="gan-bluetooth.js"></script>
+    <script src="solve-parser.js"></script>
+    <script src="timer.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
