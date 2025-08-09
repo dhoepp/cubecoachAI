@@ -5,7 +5,7 @@
 
 class CubeCoachApp {
     constructor() {
-        this.bluetooth = new GANBluetooth();
+        this.bluetooth = new GoCubeBluetooth();
         this.timer = new Timer();
         this.solveParser = new SolveParser();
         

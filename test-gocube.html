@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCube Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .test-step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #007AFF;
+        }
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007AFF;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .data-counter {
+            font-size: 18px;
+            color: #28a745;
+            margin: 5px 0;
+        }
+        .performance-stats {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .move-counter {
+            font-size: 20px;
+            font-weight: bold;
+            color: #dc3545;
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 GoCube Connection Test</h1>
+        <p>This test will connect to your GoCube and monitor accelerometer data and moves.</p>
+        
+        <div id="connection-status" class="status disconnected">
+            📡 Disconnected - Click Connect to start
+        </div>
+        
+        <div>
+            <button id="connect-btn" class="btn">Connect GoCube</button>
+            <button id="disconnect-btn" class="btn" disabled>Disconnect</button>
+            <button id="start-test-btn" class="btn" disabled>Start Test</button>
+            <button id="clear-log-btn" class="btn">Clear Log</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📋 Test Instructions</h3>
+            <div class="test-step">
+                <strong>Step 1:</strong> Connect your GoCube using the "Connect GoCube" button
+            </div>
+            <div class="test-step">
+                <strong>Step 2:</strong> Click "Start Test" to begin the 5-second test
+            </div>
+            <div class="test-step">
+                <strong>Step 3:</strong> During the test:
+                <ul>
+                    <li>🔄 Gently tilt/rotate the cube for accelerometer data</li>
+                    <li>🎯 Perform exactly 2 U face moves (U, then U or U')</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div id="test-progress" style="display: none;">
+            <div class="countdown" id="countdown">Ready...</div>
+            <div class="data-counter">📊 Accelerometer packets: <span id="accel-count">0</span></div>
+            <div class="move-counter">🎯 Moves detected: <span id="move-count">0</span> / 2</div>
+        </div>
+        
+        <div class="performance-stats" id="performance-stats" style="display: none;">
+            <h4>⚡ Performance Monitor</h4>
+            <div>Packets processed: <span id="packets-processed">0</span></div>
+            <div>Packets dropped: <span id="packets-dropped">0</span></div>
+            <div>Processing rate: <span id="processing-rate">0</span> Hz</div>
+            <div>CPU load: <span id="cpu-load">0</span>%</div>
+        </div>
+        
+        <div class="log" id="log">
+🚀 Test log will appear here...
+        </div>
+    </div>
+
+    <script src="gocube-bluetooth.js"></script>
+    <script>
+        class GoCubeTest {
+            constructor() {
+                this.bluetooth = new GoCubeBluetooth();
+                this.isConnected = false;
+                this.testInProgress = false;
+                this.testDuration = 5000; // 5 seconds
+                this.testStartTime = 0;
+                this.accelPacketCount = 0;
+                this.moveCount = 0;
+                this.uFaceMoves = 0;
+                
+                this.initializeElements();
+                this.initializeEventListeners();
+                this.log('🎲 GoCube Test initialized');
+            }
+            
+            initializeElements() {
+                this.connectBtn = document.getElementById('connect-btn');
+                this.disconnectBtn = document.getElementById('disconnect-btn');
+                this.startTestBtn = document.getElementById('start-test-btn');
+                this.clearLogBtn = document.getElementById('clear-log-btn');
+                this.connectionStatus = document.getElementById('connection-status');
+                this.logElement = document.getElementById('log');
+                this.testProgress = document.getElementById('test-progress');
+                this.countdown = document.getElementById('countdown');
+                this.accelCount = document.getElementById('accel-count');
+                this.moveCountElement = document.getElementById('move-count');
+                this.performanceStats = document.getElementById('performance-stats');
+                this.packetsProcessed = document.getElementById('packets-processed');
+                this.packetsDropped = document.getElementById('packets-dropped');
+                this.processingRate = document.getElementById('processing-rate');
+                this.cpuLoad = document.getElementById('cpu-load');
+            }
+            
+            initializeEventListeners() {
+                // UI Events
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.startTestBtn.addEventListener('click', () => this.startTest());
+                this.clearLogBtn.addEventListener('click', () => this.clearLog());
+                
+                // GoCube Events
+                this.bluetooth.on('connected', (data) => this.handleConnected(data));
+                this.bluetooth.on('disconnected', () => this.handleDisconnected());
+                this.bluetooth.on('error', (error) => this.handleError(error));
+                this.bluetooth.on('accelerometer', (data) => this.handleAccelerometer(data));
+                this.bluetooth.on('move', (data) => this.handleMove(data));
+                this.bluetooth.on('performance', (data) => this.handlePerformance(data));
+                this.bluetooth.on('rawData', (data) => this.handleRawData(data));
+            }
+            
+            async connect() {
+                try {
+                    this.log('🔄 Connecting to GoCube...');
+                    this.connectBtn.disabled = true;
+                    await this.bluetooth.connect();
+                } catch (error) {
+                    this.log(`❌ Connection failed: ${error.message}`);
+                    this.connectBtn.disabled = false;
+                }
+            }
+            
+            async disconnect() {
+                try {
+                    this.log('🔄 Disconnecting...');
+                    await this.bluetooth.disconnect();
+                } catch (error) {
+                    this.log(`⚠️ Disconnect error: ${error.message}`);
+                }
+            }
+            
+            startTest() {
+                if (this.testInProgress) return;
+                
+                this.testInProgress = true;
+                this.testStartTime = Date.now();
+                this.accelPacketCount = 0;
+                this.moveCount = 0;
+                this.uFaceMoves = 0;
+                
+                this.log('🧪 Starting 5-second test...');
+                this.log('📋 Instructions:');
+                this.log('   - Gently move the cube for accelerometer data');
+                this.log('   - Perform 2 U face moves');
+                
+                this.testProgress.style.display = 'block';
+                this.performanceStats.style.display = 'block';
+                this.startTestBtn.disabled = true;
+                
+                // Countdown timer
+                let timeLeft = 5;
+                this.countdown.textContent = `⏱️ ${timeLeft} seconds remaining`;
+                
+                const countdownInterval = setInterval(() => {
+                    timeLeft--;
+                    if (timeLeft > 0) {
+                        this.countdown.textContent = `⏱️ ${timeLeft} seconds remaining`;
+                    } else {
+                        this.countdown.textContent = '✅ Test Complete!';
+                        clearInterval(countdownInterval);
+                        this.endTest();
+                    }
+                }, 1000);
+            }
+            
+            endTest() {
+                this.testInProgress = false;
+                this.startTestBtn.disabled = false;
+                
+                const duration = Date.now() - this.testStartTime;
+                
+                this.log('📊 Test Results:');
+                this.log(`   - Duration: ${(duration / 1000).toFixed(1)}s`);
+                this.log(`   - Accelerometer packets: ${this.accelPacketCount}`);
+                this.log(`   - Total moves detected: ${this.moveCount}`);
+                this.log(`   - U face moves: ${this.uFaceMoves} / 2 expected`);
+                
+                if (this.accelPacketCount > 0) {
+                    this.log(`✅ Accelerometer data: PASS (${this.accelPacketCount} packets)`);
+                } else {
+                    this.log('❌ Accelerometer data: FAIL (no packets received)');
+                }
+                
+                if (this.uFaceMoves >= 2) {
+                    this.log('✅ U face moves: PASS');
+                } else {
+                    this.log(`❌ U face moves: FAIL (only ${this.uFaceMoves}/2 detected)`);
+                }
+                
+                this.log('🏁 Test completed!');
+            }
+            
+            handleConnected(data) {
+                this.isConnected = true;
+                this.connectBtn.disabled = true;
+                this.disconnectBtn.disabled = false;
+                this.startTestBtn.disabled = false;
+                this.connectionStatus.className = 'status connected';
+                this.connectionStatus.textContent = `📡 Connected to ${data.name || 'GoCube'}`;
+                this.log(`✅ Connected to ${data.name || 'GoCube'} (${data.id})`);
+                
+                // Enable accelerometer mode for testing
+                this.bluetooth.enableAccelerometer(true);
+                this.log('🎯 Accelerometer mode enabled for testing');
+            }
+            
+            handleDisconnected() {
+                this.isConnected = false;
+                this.connectBtn.disabled = false;
+                this.disconnectBtn.disabled = true;
+                this.startTestBtn.disabled = true;
+                this.connectionStatus.className = 'status disconnected';
+                this.connectionStatus.textContent = '📡 Disconnected';
+                this.log('❌ Disconnected from GoCube');
+                
+                if (this.testInProgress) {
+                    this.log('⚠️ Test interrupted by disconnection');
+                    this.endTest();
+                }
+            }
+            
+            handleError(error) {
+                this.log(`❌ Error: ${error}`);
+                this.connectBtn.disabled = false;
+            }
+            
+            handleAccelerometer(data) {
+                if (this.testInProgress) {
+                    this.accelPacketCount++;
+                    this.accelCount.textContent = this.accelPacketCount;
+                    
+                    // Log occasional accelerometer data
+                    if (this.accelPacketCount % 10 === 1) {
+                        this.log(`📊 Accel: x=${data.x.toFixed(2)}, y=${data.y.toFixed(2)}, z=${data.z.toFixed(2)}`);
+                    }
+                }
+            }
+            
+            handleMove(data) {
+                this.moveCount++;
+                this.moveCountElement.textContent = this.moveCount;
+                
+                // Check for U face moves
+                if (data.move && data.move.startsWith('U')) {
+                    this.uFaceMoves++;
+                }
+                
+                this.log(`🎯 Move detected: ${data.move || 'Unknown'} (confidence: ${(data.confidence * 100).toFixed(1)}%)`);
+                
+                if (this.testInProgress && this.uFaceMoves >= 2) {
+                    this.log('✅ Required U moves completed!');
+                }
+            }
+            
+            handlePerformance(data) {
+                this.packetsProcessed.textContent = data.packetsProcessed || 0;
+                this.packetsDropped.textContent = data.packetsDropped || 0;
+                this.processingRate.textContent = (data.processingRate || 0).toFixed(1);
+                this.cpuLoad.textContent = (data.cpuLoad || 0).toFixed(1);
+            }
+            
+            handleRawData(data) {
+                // Log raw data occasionally for debugging
+                if (Math.random() < 0.05) { // 5% chance
+                    this.log(`🔍 Raw: [${data.bytes.slice(0, 8).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}...]`);
+                }
+            }
+            
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logMessage = `[${timestamp}] ${message}\n`;
+                this.logElement.textContent += logMessage;
+                this.logElement.scrollTop = this.logElement.scrollHeight;
+            }
+            
+            clearLog() {
+                this.logElement.textContent = '🚀 Test log cleared...\n';
+            }
+        }
+        
+        // Initialize the test when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.goCubeTest = new GoCubeTest();
+        });
+    </script>
+</body>
+</html>

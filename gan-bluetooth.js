@@ -759,49 +759,50 @@ class GANBluetooth {
     }
 
     /**
-     * Parse raw move data with pattern change analysis
+     * Parse raw move data with improved pattern change analysis
      */
     parseRawMoveData(data) {
-        console.log('Attempting to parse move from data:', Array.from(data));
+        if (data.length !== 20) {
+            return null; // Only handle 20-byte packets
+        }
         
-        if (data.length === 20) {
-            console.log('Analyzing 20-byte packet for move encoding...');
+        // Calculate packet signature for pattern analysis
+        const packetSignature = this.calculatePacketSignature(data);
+        const hexString = Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+        
+        // Store this packet for pattern analysis
+        if (!this.lastMovePacket) {
+            console.log('📦 Storing baseline packet for comparison');
+            this.lastMovePacket = {
+                data: new Uint8Array(data),
+                signature: packetSignature,
+                timestamp: Date.now()
+            };
+            return null;
+        }
+        
+        // Compare with last packet to detect changes
+        const timeSinceLastPacket = Date.now() - this.lastMovePacket.timestamp;
+        const isDifferentPacket = !this.arraysEqual(data, this.lastMovePacket.data);
+        
+        // More restrictive timing and change detection
+        if (isDifferentPacket && timeSinceLastPacket > 500) { // Increased from 300ms
             
-            // Calculate packet signature for pattern analysis
-            const packetSignature = this.calculatePacketSignature(data);
-            const hexString = Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+            // Analyze the differences
+            const differences = this.analyzePacketDifferences(this.lastMovePacket.data, data);
             
-            // Store this packet for pattern analysis
-            if (!this.lastMovePacket) {
-                console.log('Storing first packet as baseline for comparison');
-                this.lastMovePacket = {
-                    data: new Uint8Array(data),
-                    signature: packetSignature,
-                    timestamp: Date.now()
-                };
-                return null;
-            }
+            // Much more restrictive move detection criteria
+            const isLikelyMove = this.isLikelyRealMove(differences, timeSinceLastPacket);
             
-            // Compare with last packet to detect changes
-            const timeSinceLastPacket = Date.now() - this.lastMovePacket.timestamp;
-            const isDifferentPacket = !this.arraysEqual(data, this.lastMovePacket.data);
-            
-            if (isDifferentPacket && timeSinceLastPacket > 300) {
-                console.log('🎯 PACKET CHANGE DETECTED - Possible move!');
-                console.log('Previous packet:', Array.from(this.lastMovePacket.data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
-                console.log('Current packet: ', hexString);
-                console.log('Time since last:', timeSinceLastPacket + 'ms');
+            if (isLikelyMove) {
+                console.log('🎯 REAL MOVE DETECTED!');
+                console.log('Previous:', Array.from(this.lastMovePacket.data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+                console.log('Current: ', hexString);
+                console.log('Time gap:', timeSinceLastPacket + 'ms');
+                console.log('Changes: ', differences.totalChanges, 'positions:', differences.changePositions);
                 
-                // Analyze the differences
-                const differences = this.analyzePacketDifferences(this.lastMovePacket.data, data);
-                console.log('Packet differences:', differences);
-                
-                // Try to decode the move from packet structure changes
-                const possibleMove = this.decodeMoveFromPacketChange(this.lastMovePacket, {
-                    data: new Uint8Array(data),
-                    signature: packetSignature,
-                    timestamp: Date.now()
-                });
+                // Try to decode the actual move from the patterns
+                const moveResult = this.analyzeRealMovePattern(differences, this.lastMovePacket.signature, packetSignature);
                 
                 // Update last packet
                 this.lastMovePacket = {
@@ -810,25 +811,27 @@ class GANBluetooth {
                     timestamp: Date.now()
                 };
                 
-                if (possibleMove) {
-                    console.log('✅ MOVE DECODED:', possibleMove);
+                if (moveResult && moveResult.move !== 'Unknown') {
+                    console.log('✅ MOVE IDENTIFIED:', moveResult.move, 'confidence:', moveResult.confidence);
                     return {
                         type: 'move',
-                        move: possibleMove.move,
-                        confidence: possibleMove.confidence,
+                        move: moveResult.move,
+                        confidence: moveResult.confidence,
                         timestamp: Date.now(),
                         packetChange: differences,
                         raw: Array.from(data)
                     };
+                } else {
+                    console.log('⚠️ Move detected but could not identify type');
+                    return null; // Don't emit unidentified moves
                 }
-            } else if (isDifferentPacket) {
-                console.log('Packet changed but too soon after last change, likely noise');
+            } else {
+                console.log('📡 Packet change detected but doesn\'t match move criteria (likely heartbeat variation)');
             }
-            
-            return null;
+        } else if (isDifferentPacket) {
+            console.log('⏱️ Packet changed too quickly, ignoring (likely status update)');
         }
         
-        console.log('Non-standard packet length, skipping analysis');
         return null;
     }
 
@@ -887,91 +890,114 @@ class GANBluetooth {
     }
 
     /**
-     * Attempt to decode move from packet structure change
+     * Improved check for whether a packet change represents a real move
      */
-    decodeMoveFromPacketChange(previousPacket, currentPacket) {
-        // Analyze the pattern of changes between packets
-        const differences = this.analyzePacketDifferences(previousPacket.data, currentPacket.data);
+    isLikelyRealMove(differences, timeSinceLastPacket) {
+        // Much more restrictive criteria based on observations
         
-        // Based on your move test data, I can see patterns:
-        // The cube changes multiple bytes when a move is made
-        // Let's start with basic pattern recognition
-        
-        if (differences.totalChanges === 0) {
-            return null; // No change, no move
+        // 1. Must have substantial changes (not just 1-2 bytes)
+        if (differences.totalChanges < 5) {
+            console.log('❌ Too few changes for real move:', differences.totalChanges);
+            return false;
         }
         
-        console.log('Analyzing packet change pattern for move detection...');
-        console.log('Changes detected:', differences.totalChanges, 'positions:', differences.changePositions);
+        // 2. Changes should be distributed, not clustered
+        const changeSpread = Math.max(...differences.changePositions) - Math.min(...differences.changePositions);
+        if (changeSpread < 8) {
+            console.log('❌ Changes too clustered for real move, spread:', changeSpread);
+            return false;
+        }
         
-        // For now, let's use a simple heuristic based on the test data:
-        // Moves seem to cause significant changes in multiple positions
+        // 3. Should have multiple significant changes (large byte differences)
+        if (differences.significantChanges.length < 2) {
+            console.log('❌ Not enough significant changes:', differences.significantChanges.length);
+            return false;
+        }
         
-        if (differences.totalChanges >= 3 && differences.significantChanges.length >= 1) {
-            // This looks like a real move
-            // Try to determine which move based on the pattern
-            
-            // Analyze the checksum/signature changes
-            const checksumDelta = currentPacket.signature.checksum - previousPacket.signature.checksum;
-            const xorDelta = currentPacket.signature.xor - previousPacket.signature.xor;
-            
-            console.log('Signature analysis:', {
-                checksumDelta: checksumDelta,
-                xorDelta: xorDelta,
-                sumDelta: currentPacket.signature.sum - previousPacket.signature.sum
-            });
-            
-            // For testing, let's try to map patterns to moves
-            // This is where we'd implement the actual decoding logic
-            // based on more data collection
-            
-            const move = this.guessMoveFromPattern(differences, previousPacket.signature, currentPacket.signature);
-            
+        // 4. Time gap should be reasonable for human move (not too fast, not too slow)
+        if (timeSinceLastPacket < 800) { // Minimum 800ms between moves
+            console.log('❌ Too quick for human move:', timeSinceLastPacket + 'ms');
+            return false;
+        }
+        
+        if (timeSinceLastPacket > 10000) { // More than 10 seconds is probably not consecutive moves
+            console.log('❌ Too long gap, might be heartbeat shift:', timeSinceLastPacket + 'ms');
+            return false;
+        }
+        
+        console.log('✅ Packet change matches real move criteria');
+        return true;
+    }
+
+    /**
+     * Advanced move pattern analysis based on your test data
+     */
+    analyzeRealMovePattern(differences, previousSig, currentSig) {
+        // Analyze signature changes for move identification
+        const checksumDelta = currentSig.checksum - previousSig.checksum;
+        const xorDelta = currentSig.xor - previousSig.xor;
+        const sumDelta = currentSig.sum - previousSig.sum;
+        
+        console.log('🔍 Advanced pattern analysis:', {
+            changeCount: differences.totalChanges,
+            checksumDelta: checksumDelta,
+            xorDelta: xorDelta,
+            sumDelta: sumDelta,
+            significantChanges: differences.significantChanges.length,
+            firstChangePos: differences.changes[0]?.position,
+            lastChangePos: differences.changes[differences.changes.length - 1]?.position
+        });
+        
+        // Based on your actual test data, try to identify patterns
+        // This would ideally be built from a larger dataset of known moves
+        
+        // Look for specific patterns in the test data you provided:
+        // U moves seemed to have different signatures than F moves
+        
+        // For now, use a basic heuristic that acknowledges we don't know the exact encoding
+        const move = this.attemptMoveIdentification(differences, checksumDelta, xorDelta, sumDelta);
+        
+        if (move) {
             return {
-                move: move || 'Unknown',
-                confidence: move ? 0.7 : 0.3,
-                pattern: differences,
-                signatureChange: {
+                move: move,
+                confidence: 0.6, // Lower confidence since we're still reverse engineering
+                analysis: {
                     checksumDelta: checksumDelta,
-                    xorDelta: xorDelta
+                    xorDelta: xorDelta,
+                    sumDelta: sumDelta,
+                    changePattern: differences.changePositions
                 }
             };
         }
         
-        console.log('Pattern does not match move criteria');
-        return null;
+        return {
+            move: 'Move', // Generic "move detected" rather than guessing wrong
+            confidence: 0.4,
+            analysis: {
+                checksumDelta: checksumDelta,
+                xorDelta: xorDelta,
+                sumDelta: sumDelta,
+                changePattern: differences.changePositions
+            }
+        };
     }
 
     /**
-     * Attempt to guess move from change pattern
-     * This is where the machine learning/pattern recognition would go
+     * Attempt to identify specific move from patterns
+     * This needs more data to be accurate - just basic heuristics for now
      */
-    guessMoveFromPattern(differences, previousSig, currentSig) {
-        // This is a placeholder for move pattern recognition
-        // In a full implementation, this would use machine learning
-        // or lookup tables built from extensive data collection
+    attemptMoveIdentification(differences, checksumDelta, xorDelta, sumDelta) {
+        // Very basic pattern matching - this would need extensive training data
+        // to be accurate. For now, just detect that SOME move happened.
         
-        const checksumDelta = currentSig.checksum - previousSig.checksum;
-        const changeCount = differences.totalChanges;
-        const firstChangePos = differences.changes[0]?.position || -1;
+        // Based on your test data patterns, different moves have different signatures
+        // But without more controlled testing, we can't reliably map them
         
-        console.log('Move pattern analysis:', {
-            changeCount: changeCount,
-            checksumDelta: checksumDelta,
-            firstChangePos: firstChangePos
-        });
+        // Return null to fall back to generic "Move" detection
+        // Once we have more data, we could build a proper lookup table here
         
-        // Placeholder logic - this would be replaced with real decoding
-        // based on pattern analysis from your move test data
-        
-        // For demonstration, let's return a basic move detection
-        if (changeCount >= 5) {
-            return 'U'; // Face moves might cause more changes
-        } else if (changeCount >= 3) {
-            return 'U\''; // Different move types might have different patterns
-        }
-        
-        return null; // Unable to determine move
+        console.log('🤔 Move identification needs more training data - detecting generic move');
+        return null;
     }
 
     /**
