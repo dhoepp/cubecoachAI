@@ -65,7 +65,7 @@
         }
         .calibration-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin: 20px 0;
         }
@@ -154,6 +154,7 @@
         <div>
             <button id="connect-btn" class="btn">Connect GoCube</button>
             <button id="start-calibration-btn" class="btn" disabled>Start Calibration</button>
+            <button id="finish-step-btn" class="btn" disabled style="display: none;">✅ Finish This Step</button>
             <button id="reset-calibration-btn" class="btn" disabled>Reset Calibration</button>
             <button id="export-results-btn" class="btn" disabled>Export Results</button>
         </div>
@@ -208,6 +209,36 @@
                 <div class="move-description">Turn front face counter-clockwise</div>
                 <div class="calibration-data" id="data-F'">Not calibrated</div>
             </div>
+            <div class="move-card" data-move="L">
+                <div class="move-name">L</div>
+                <div class="move-description">Turn left face clockwise</div>
+                <div class="calibration-data" id="data-L">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="L'">
+                <div class="move-name">L'</div>
+                <div class="move-description">Turn left face counter-clockwise</div>
+                <div class="calibration-data" id="data-L'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="D">
+                <div class="move-name">D</div>
+                <div class="move-description">Turn bottom face clockwise</div>
+                <div class="calibration-data" id="data-D">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="D'">
+                <div class="move-name">D'</div>
+                <div class="move-description">Turn bottom face counter-clockwise</div>
+                <div class="calibration-data" id="data-D'">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="B">
+                <div class="move-name">B</div>
+                <div class="move-description">Turn back face clockwise</div>
+                <div class="calibration-data" id="data-B">Not calibrated</div>
+            </div>
+            <div class="move-card" data-move="B'">
+                <div class="move-name">B'</div>
+                <div class="move-description">Turn back face counter-clockwise</div>
+                <div class="calibration-data" id="data-B'">Not calibrated</div>
+            </div>
         </div>
         
         <div id="calibration-results" class="results" style="display: none;">
@@ -242,6 +273,7 @@
             initializeElements() {
                 this.connectBtn = document.getElementById('connect-btn');
                 this.startCalibrationBtn = document.getElementById('start-calibration-btn');
+                this.finishStepBtn = document.getElementById('finish-step-btn');
                 this.resetCalibrationBtn = document.getElementById('reset-calibration-btn');
                 this.exportResultsBtn = document.getElementById('export-results-btn');
                 this.connectionStatus = document.getElementById('connection-status');
@@ -257,6 +289,7 @@
                 // UI Events
                 this.connectBtn.addEventListener('click', () => this.connect());
                 this.startCalibrationBtn.addEventListener('click', () => this.startCalibration());
+                this.finishStepBtn.addEventListener('click', () => this.finishCurrentStep());
                 this.resetCalibrationBtn.addEventListener('click', () => this.resetCalibration());
                 this.exportResultsBtn.addEventListener('click', () => this.exportResults());
                 
@@ -292,6 +325,7 @@
                 this.calibrationProgress.style.display = 'block';
                 
                 this.log('🎯 Starting calibration sequence...');
+                this.log('💡 For each move: 1) Perform the move, 2) Click "Finish This Step"');
                 this.startNextMoveCalibration();
             }
             
@@ -308,8 +342,12 @@
                 this.currentInstruction.innerHTML = `
                     <strong>Step ${this.currentMoveIndex + 1} of ${this.movesToCalibrate.length}</strong><br>
                     🎯 Please perform: <strong>${currentMove}</strong><br>
-                    <em>Waiting for move detection...</em>
+                    <em>1) Do the move, 2) Click "Finish This Step" below</em>
                 `;
+                
+                // Show the finish step button
+                this.finishStepBtn.style.display = 'inline-block';
+                this.finishStepBtn.disabled = false;
                 
                 // Highlight the current move card
                 document.querySelectorAll('.move-card').forEach(card => {
@@ -318,14 +356,100 @@
                 document.querySelector(`[data-move="${currentMove}"]`).classList.add('waiting');
                 
                 this.log(`🎯 Calibrating move: ${currentMove}`);
-                this.log(`📋 Please perform a ${currentMove} move now...`);
+                this.log(`📋 1) Perform the ${currentMove} move`);
+                this.log(`📋 2) Click "Finish This Step" button`);
                 
-                // Clear buffer to capture fresh data
+                // Clear buffer to capture fresh data for this step
                 this.accelerometerBuffer = [];
-                this.waitingForMove = true;
-                this.moveStartTime = Date.now();
+                this.movesDetectedThisStep = [];
+                this.stepStartTime = Date.now();
             }
             
+            finishCurrentStep() {
+                const currentMove = this.movesToCalibrate[this.currentMoveIndex];
+                
+                this.log(`✅ Finishing calibration for ${currentMove}`);
+                this.log(`📊 Collected ${this.accelerometerBuffer.length} accelerometer samples`);
+                this.log(`📊 Detected ${this.movesDetectedThisStep.length} moves during this step`);
+                
+                // Store calibration data for this step
+                this.calibrationData[currentMove] = {
+                    expectedMove: currentMove,
+                    detectedMoves: [...this.movesDetectedThisStep],
+                    accelerometerData: [...this.accelerometerBuffer],
+                    stepDuration: Date.now() - this.stepStartTime,
+                    timestamp: Date.now()
+                };
+                
+                // Analyze the acceleration data for patterns
+                if (this.accelerometerBuffer.length > 0) {
+                    const analysis = this.analyzeStepData(this.accelerometerBuffer);
+                    this.calibrationData[currentMove].analysis = analysis;
+                    
+                    this.log(`📊 Primary axis: ${analysis.primaryAxis}, Max delta: ${analysis.maxDelta.toFixed(2)}`);
+                }
+                
+                // Update UI
+                const moveCard = document.querySelector(`[data-move="${currentMove}"]`);
+                moveCard.classList.remove('waiting');
+                moveCard.classList.add('completed');
+                
+                const dataElement = document.getElementById(`data-${currentMove}`);
+                const bestMove = this.movesDetectedThisStep.length > 0 ? this.movesDetectedThisStep[0] : 'None';
+                dataElement.innerHTML = `
+                    Samples: ${this.accelerometerBuffer.length}<br>
+                    Detected: ${bestMove.move || 'None'}<br>
+                    ✅ Completed
+                `;
+                
+                // Hide finish button and move to next
+                this.finishStepBtn.style.display = 'none';
+                this.currentMoveIndex++;
+                
+                // Move to next calibration after a short delay
+                setTimeout(() => {
+                    this.startNextMoveCalibration();
+                }, 500);
+            }
+            
+            analyzeStepData(accelerometerData) {
+                if (accelerometerData.length === 0) return { primaryAxis: 'none', maxDelta: 0 };
+                
+                // Find the biggest acceleration changes
+                let maxDeltaX = 0, maxDeltaY = 0, maxDeltaZ = 0;
+                
+                for (let i = 1; i < accelerometerData.length; i++) {
+                    const prev = accelerometerData[i-1];
+                    const curr = accelerometerData[i];
+                    
+                    maxDeltaX = Math.max(maxDeltaX, Math.abs(curr.x - prev.x));
+                    maxDeltaY = Math.max(maxDeltaY, Math.abs(curr.y - prev.y));
+                    maxDeltaZ = Math.max(maxDeltaZ, Math.abs(curr.z - prev.z));
+                }
+                
+                // Determine primary axis
+                let primaryAxis = 'x';
+                let maxDelta = maxDeltaX;
+                
+                if (maxDeltaY > maxDelta) {
+                    primaryAxis = 'y';
+                    maxDelta = maxDeltaY;
+                }
+                if (maxDeltaZ > maxDelta) {
+                    primaryAxis = 'z';
+                    maxDelta = maxDeltaZ;
+                }
+                
+                return {
+                    primaryAxis,
+                    maxDelta,
+                    deltaX: maxDeltaX,
+                    deltaY: maxDeltaY,
+                    deltaZ: maxDeltaZ,
+                    sampleCount: accelerometerData.length
+                };
+            }
+
             handleConnected(data) {
                 this.isConnected = true;
                 this.connectBtn.disabled = true;
@@ -356,9 +480,9 @@
             }
             
             handleAccelerometer(data) {
-                if (!this.calibrationInProgress || !this.waitingForMove) return;
+                if (!this.calibrationInProgress) return;
                 
-                // Buffer accelerometer data around move detection
+                // Always buffer accelerometer data during calibration
                 this.accelerometerBuffer.push({
                     x: data.x,
                     y: data.y,
@@ -367,47 +491,33 @@
                     magnitude: data.magnitude || Math.sqrt(data.x*data.x + data.y*data.y + data.z*data.z)
                 });
                 
-                // Keep only last 2 seconds of data
-                const cutoff = Date.now() - 2000;
+                // Keep only last 5 seconds of data to prevent memory issues
+                const cutoff = Date.now() - 5000;
                 this.accelerometerBuffer = this.accelerometerBuffer.filter(d => d.timestamp > cutoff);
+                
+                // Log occasional data to show activity
+                if (this.accelerometerBuffer.length % 20 === 1) {
+                    this.log(`📊 Collecting data... ${this.accelerometerBuffer.length} samples (x=${data.x.toFixed(2)}, y=${data.y.toFixed(2)}, z=${data.z.toFixed(2)})`);
+                }
             }
             
             handleMove(data) {
-                if (!this.calibrationInProgress || !this.waitingForMove) return;
+                if (!this.calibrationInProgress) return;
                 
-                const currentMove = this.movesToCalibrate[this.currentMoveIndex];
+                // Store all detected moves during this calibration step
+                if (!this.movesDetectedThisStep) {
+                    this.movesDetectedThisStep = [];
+                }
                 
-                this.log(`✅ Move detected during ${currentMove} calibration!`);
-                this.log(`📊 Analysis: ${JSON.stringify(data.analysis, null, 2)}`);
-                
-                // Store calibration data
-                this.calibrationData[currentMove] = {
-                    detectedMove: data.move,
+                this.movesDetectedThisStep.push({
+                    move: data.move,
                     confidence: data.confidence,
                     analysis: data.analysis,
-                    accelerometerData: this.accelerometerBuffer.slice(-10), // Last 10 samples
                     timestamp: Date.now()
-                };
+                });
                 
-                // Update UI
-                const moveCard = document.querySelector(`[data-move="${currentMove}"]`);
-                moveCard.classList.remove('waiting');
-                moveCard.classList.add('completed');
-                
-                const dataElement = document.getElementById(`data-${currentMove}`);
-                dataElement.innerHTML = `
-                    Detected: ${data.move}<br>
-                    Axis: ${data.analysis.primaryAxis}<br>
-                    Delta: ${data.analysis.delta}
-                `;
-                
-                this.waitingForMove = false;
-                this.currentMoveIndex++;
-                
-                // Move to next calibration after a short delay
-                setTimeout(() => {
-                    this.startNextMoveCalibration();
-                }, 1000);
+                this.log(`🎯 Move detected: ${data.move} (confidence: ${(data.confidence * 100).toFixed(1)}%)`);
+                this.log(`📊 Analysis: axis=${data.analysis.primaryAxis}, delta=${data.analysis.delta}`);
             }
             
             completeCalibration() {
@@ -461,11 +571,12 @@
                 this.calibrationInProgress = false;
                 this.currentMoveIndex = 0;
                 this.calibrationData = {};
-                this.waitingForMove = false;
+                this.movesDetectedThisStep = [];
                 
                 this.startCalibrationBtn.disabled = false;
                 this.resetCalibrationBtn.disabled = true;
                 this.exportResultsBtn.disabled = true;
+                this.finishStepBtn.style.display = 'none';
                 this.calibrationProgress.style.display = 'none';
                 this.calibrationResults.style.display = 'none';
                 
