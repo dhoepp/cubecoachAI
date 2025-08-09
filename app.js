@@ -89,7 +89,7 @@ class CubeCoachApp {
     }
 
     /**
-     * Connect to GAN cube
+     * Connect to GoCube
      */
     async connectToCube() {
         try {
