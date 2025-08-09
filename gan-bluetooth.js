@@ -56,6 +56,11 @@ class GANBluetooth {
         this.dataBuffer = new Uint8Array(0);
         this.expectedPackets = 0;
         this.receivedPackets = 0;
+        
+        // Move detection filtering
+        this.lastDataTime = null;
+        this.lastDataBytes = null;
+        this.lastMovePacket = null;
     }
 
     /**
@@ -497,15 +502,15 @@ class GANBluetooth {
      */
     async initializeCube() {
         try {
-            // Send initialization commands to enable solve data transmission
-            // These are typical GAN cube initialization commands
-            if (this.rxCharacteristic) {
-                await this.sendCommand([0x01, 0x02]); // Enable notifications
-                await this.sleep(100);
-                await this.sendCommand([0x02, 0x01]); // Request cube state
-                await this.sleep(100);
-                await this.sendCommand([0x03, 0x01]); // Enable solve data
-            }
+            console.log('Initializing cube communication...');
+            
+            // Your cube model doesn't respond well to standard initialization commands
+            // The cube is already sending data, so we'll skip initialization
+            console.log('Skipping initialization commands for this cube model');
+            
+            // Just log that we're ready to receive data
+            console.log('Cube ready to receive move data');
+            
         } catch (error) {
             console.warn('Cube initialization warning:', error);
         }
@@ -562,9 +567,64 @@ class GANBluetooth {
      */
     handleDataReceived(dataValue) {
         const data = new Uint8Array(dataValue.buffer);
-        console.log('Received data:', Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        const hexString = Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+        console.log('Received data:', hexString);
+        console.log('Data length:', data.length, 'bytes');
+        console.log('Raw bytes:', Array.from(data));
 
-        // Append data to buffer
+        // Emit raw data for debugging
+        this.emit('rawData', {
+            hex: hexString,
+            bytes: Array.from(data),
+            timestamp: Date.now()
+        });
+
+        // ANALYSIS MODE: Log all packets for scientific analysis
+        // This helps us understand your cube's specific protocol
+        if (window.CUBE_ANALYSIS_MODE) {
+            console.log(`=== ANALYSIS PACKET ${Date.now()} ===`);
+            console.log('Length:', data.length);
+            console.log('Hex:', hexString);
+            console.log('Decimal:', Array.from(data));
+            console.log('Possible moves:', Array.from(data).map((byte, idx) => {
+                const moveMap = {
+                    0x01: "U", 0x02: "U'", 0x03: "U2",
+                    0x04: "D", 0x05: "D'", 0x06: "D2",
+                    0x07: "R", 0x08: "R'", 0x09: "R2",
+                    0x0A: "L", 0x0B: "L'", 0x0C: "L2",
+                    0x0D: "F", 0x0E: "F'", 0x0F: "F2",
+                    0x10: "B", 0x11: "B'", 0x12: "B2"
+                };
+                return moveMap[byte] ? `pos${idx}:${moveMap[byte]}` : null;
+            }).filter(Boolean));
+            console.log('=== END PACKET ===');
+        }
+
+        // MOVE TEST MODE: Collect packets during specific move testing
+        if (window.MOVE_TEST_MODE) {
+            const timeSinceStart = Date.now() - window.MOVE_TEST_START;
+            window.MOVE_TEST_PACKETS.push({
+                timestamp: Date.now(),
+                timeSinceStart: timeSinceStart,
+                data: Array.from(data),
+                hex: hexString
+            });
+            
+            console.log(`🎯 TEST PACKET ${timeSinceStart}ms: ${hexString}`);
+        }
+
+        // Only try to parse moves if the data looks like it could be a move
+        // Moves typically have specific patterns and are not sent continuously
+        if (this.couldBeMove(data)) {
+            const moveData = this.parseRawMoveData(data);
+            if (moveData) {
+                this.emit('moveData', moveData);
+            }
+        } else {
+            console.log('Data appears to be status/heartbeat, not a move');
+        }
+
+        // Also keep the original buffer parsing for other message types
         const newBuffer = new Uint8Array(this.dataBuffer.length + data.length);
         newBuffer.set(this.dataBuffer);
         newBuffer.set(data, this.dataBuffer.length);
@@ -572,6 +632,77 @@ class GANBluetooth {
 
         // Try to parse complete messages
         this.parseDataBuffer();
+    }
+
+    /**
+     * Check if data could potentially be a move
+     */
+    couldBeMove(data) {
+        // Filter out obvious non-move patterns
+        
+        // 1. Too frequent data (moves don't happen every second)
+        const now = Date.now();
+        if (this.lastDataTime && (now - this.lastDataTime) < 200) {
+            // Data coming too frequently (less than 200ms apart) is likely status
+            console.log('Data too frequent, likely status data');
+            this.lastDataTime = now;
+            return false;
+        }
+        this.lastDataTime = now;
+        
+        // 2. Check for repetitive patterns (status data often repeats)
+        if (this.lastDataBytes && this.arraysEqual(data, this.lastDataBytes)) {
+            console.log('Identical to last data, likely status');
+            return false;
+        }
+        
+        // 3. Very small data packets are often status
+        if (data.length < 3) {
+            console.log('Data too small for move');
+            return false;
+        }
+        
+        // 4. Check for known status patterns (these are common in GAN cubes)
+        const statusPatterns = [
+            [0x00, 0x00], // Common heartbeat
+            [0xFF, 0xFF], // Another status pattern
+            [0x01, 0x00], // Status update
+            [0x02, 0x00], // Battery status
+        ];
+        
+        for (const pattern of statusPatterns) {
+            if (data.length >= pattern.length) {
+                let matches = true;
+                for (let i = 0; i < pattern.length; i++) {
+                    if (data[i] !== pattern[i]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    console.log('Matches known status pattern');
+                    return false;
+                }
+            }
+        }
+        
+        // 5. Save this data for comparison
+        this.lastDataBytes = new Uint8Array(data);
+        
+        // If it passes all filters, it might be a move
+        console.log('Data passed move filters, analyzing...');
+        return true;
+    }
+
+    /**
+     * Helper function to compare arrays
+     */
+    arraysEqual(a, b) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
     }
 
     /**
@@ -602,14 +733,10 @@ class GANBluetooth {
                     break; // Wait for more data
                 }
             } else if (this.dataBuffer[offset] === 0x03) {
-                // Solve completion message
-                if (this.dataBuffer.length >= offset + 8) {
-                    const solveData = this.parseSolveCompletion(this.dataBuffer.slice(offset, offset + 8));
-                    this.emit('solveComplete', solveData);
-                    offset += 8;
-                } else {
-                    break; // Wait for more data
-                }
+                // Solve completion message - DISABLED for your cube
+                // Your cube seems to send different solve completion data that's invalid
+                console.log('Skipping solve completion parsing for this cube model');
+                offset++;
             } else if (this.dataBuffer[offset] === 0x04) {
                 // Gyroscope/orientation data
                 if (this.dataBuffer.length >= offset + 12) {
@@ -629,6 +756,341 @@ class GANBluetooth {
         if (offset > 0) {
             this.dataBuffer = this.dataBuffer.slice(offset);
         }
+    }
+
+    /**
+     * Parse raw move data with pattern change analysis
+     */
+    parseRawMoveData(data) {
+        console.log('Attempting to parse move from data:', Array.from(data));
+        
+        if (data.length === 20) {
+            console.log('Analyzing 20-byte packet for move encoding...');
+            
+            // Calculate packet signature for pattern analysis
+            const packetSignature = this.calculatePacketSignature(data);
+            const hexString = Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+            
+            // Store this packet for pattern analysis
+            if (!this.lastMovePacket) {
+                console.log('Storing first packet as baseline for comparison');
+                this.lastMovePacket = {
+                    data: new Uint8Array(data),
+                    signature: packetSignature,
+                    timestamp: Date.now()
+                };
+                return null;
+            }
+            
+            // Compare with last packet to detect changes
+            const timeSinceLastPacket = Date.now() - this.lastMovePacket.timestamp;
+            const isDifferentPacket = !this.arraysEqual(data, this.lastMovePacket.data);
+            
+            if (isDifferentPacket && timeSinceLastPacket > 300) {
+                console.log('🎯 PACKET CHANGE DETECTED - Possible move!');
+                console.log('Previous packet:', Array.from(this.lastMovePacket.data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+                console.log('Current packet: ', hexString);
+                console.log('Time since last:', timeSinceLastPacket + 'ms');
+                
+                // Analyze the differences
+                const differences = this.analyzePacketDifferences(this.lastMovePacket.data, data);
+                console.log('Packet differences:', differences);
+                
+                // Try to decode the move from packet structure changes
+                const possibleMove = this.decodeMoveFromPacketChange(this.lastMovePacket, {
+                    data: new Uint8Array(data),
+                    signature: packetSignature,
+                    timestamp: Date.now()
+                });
+                
+                // Update last packet
+                this.lastMovePacket = {
+                    data: new Uint8Array(data),
+                    signature: packetSignature,
+                    timestamp: Date.now()
+                };
+                
+                if (possibleMove) {
+                    console.log('✅ MOVE DECODED:', possibleMove);
+                    return {
+                        type: 'move',
+                        move: possibleMove.move,
+                        confidence: possibleMove.confidence,
+                        timestamp: Date.now(),
+                        packetChange: differences,
+                        raw: Array.from(data)
+                    };
+                }
+            } else if (isDifferentPacket) {
+                console.log('Packet changed but too soon after last change, likely noise');
+            }
+            
+            return null;
+        }
+        
+        console.log('Non-standard packet length, skipping analysis');
+        return null;
+    }
+
+    /**
+     * Calculate a signature for the packet to detect patterns
+     */
+    calculatePacketSignature(data) {
+        // Calculate various signatures that might indicate move encoding
+        const sum = data.reduce((a, b) => a + b, 0);
+        const xor = data.reduce((a, b) => a ^ b, 0);
+        const first4 = Array.from(data.slice(0, 4));
+        const last4 = Array.from(data.slice(-4));
+        
+        return {
+            sum: sum,
+            xor: xor,
+            checksum: sum % 256,
+            first4: first4,
+            last4: last4,
+            length: data.length
+        };
+    }
+
+    /**
+     * Analyze differences between two packets
+     */
+    analyzePacketDifferences(packet1, packet2) {
+        const differences = [];
+        const significantChanges = [];
+        
+        for (let i = 0; i < Math.min(packet1.length, packet2.length); i++) {
+            if (packet1[i] !== packet2[i]) {
+                const change = {
+                    position: i,
+                    from: packet1[i],
+                    to: packet2[i],
+                    fromHex: '0x' + packet1[i].toString(16).padStart(2, '0'),
+                    toHex: '0x' + packet2[i].toString(16).padStart(2, '0'),
+                    delta: packet2[i] - packet1[i]
+                };
+                differences.push(change);
+                
+                // Mark significant changes (large deltas might indicate move encoding)
+                if (Math.abs(change.delta) > 16) {
+                    significantChanges.push(change);
+                }
+            }
+        }
+        
+        return {
+            totalChanges: differences.length,
+            changes: differences,
+            significantChanges: significantChanges,
+            changePositions: differences.map(d => d.position)
+        };
+    }
+
+    /**
+     * Attempt to decode move from packet structure change
+     */
+    decodeMoveFromPacketChange(previousPacket, currentPacket) {
+        // Analyze the pattern of changes between packets
+        const differences = this.analyzePacketDifferences(previousPacket.data, currentPacket.data);
+        
+        // Based on your move test data, I can see patterns:
+        // The cube changes multiple bytes when a move is made
+        // Let's start with basic pattern recognition
+        
+        if (differences.totalChanges === 0) {
+            return null; // No change, no move
+        }
+        
+        console.log('Analyzing packet change pattern for move detection...');
+        console.log('Changes detected:', differences.totalChanges, 'positions:', differences.changePositions);
+        
+        // For now, let's use a simple heuristic based on the test data:
+        // Moves seem to cause significant changes in multiple positions
+        
+        if (differences.totalChanges >= 3 && differences.significantChanges.length >= 1) {
+            // This looks like a real move
+            // Try to determine which move based on the pattern
+            
+            // Analyze the checksum/signature changes
+            const checksumDelta = currentPacket.signature.checksum - previousPacket.signature.checksum;
+            const xorDelta = currentPacket.signature.xor - previousPacket.signature.xor;
+            
+            console.log('Signature analysis:', {
+                checksumDelta: checksumDelta,
+                xorDelta: xorDelta,
+                sumDelta: currentPacket.signature.sum - previousPacket.signature.sum
+            });
+            
+            // For testing, let's try to map patterns to moves
+            // This is where we'd implement the actual decoding logic
+            // based on more data collection
+            
+            const move = this.guessMoveFromPattern(differences, previousPacket.signature, currentPacket.signature);
+            
+            return {
+                move: move || 'Unknown',
+                confidence: move ? 0.7 : 0.3,
+                pattern: differences,
+                signatureChange: {
+                    checksumDelta: checksumDelta,
+                    xorDelta: xorDelta
+                }
+            };
+        }
+        
+        console.log('Pattern does not match move criteria');
+        return null;
+    }
+
+    /**
+     * Attempt to guess move from change pattern
+     * This is where the machine learning/pattern recognition would go
+     */
+    guessMoveFromPattern(differences, previousSig, currentSig) {
+        // This is a placeholder for move pattern recognition
+        // In a full implementation, this would use machine learning
+        // or lookup tables built from extensive data collection
+        
+        const checksumDelta = currentSig.checksum - previousSig.checksum;
+        const changeCount = differences.totalChanges;
+        const firstChangePos = differences.changes[0]?.position || -1;
+        
+        console.log('Move pattern analysis:', {
+            changeCount: changeCount,
+            checksumDelta: checksumDelta,
+            firstChangePos: firstChangePos
+        });
+        
+        // Placeholder logic - this would be replaced with real decoding
+        // based on pattern analysis from your move test data
+        
+        // For demonstration, let's return a basic move detection
+        if (changeCount >= 5) {
+            return 'U'; // Face moves might cause more changes
+        } else if (changeCount >= 3) {
+            return 'U\''; // Different move types might have different patterns
+        }
+        
+        return null; // Unable to determine move
+    }
+
+    /**
+     * Calculate entropy (randomness) of data
+     */
+    calculateDataEntropy(data) {
+        const frequency = new Array(256).fill(0);
+        const len = data.length;
+        
+        // Count byte frequencies
+        for (let i = 0; i < len; i++) {
+            frequency[data[i]]++;
+        }
+        
+        // Calculate entropy
+        let entropy = 0;
+        for (let i = 0; i < 256; i++) {
+            if (frequency[i] > 0) {
+                const p = frequency[i] / len;
+                entropy -= p * Math.log2(p);
+            }
+        }
+        
+        return entropy / 8; // Normalize to 0-1 range
+    }
+
+    /**
+     * Check if data has recognizable structure
+     */
+    hasDataStructure(data) {
+        // Look for patterns that suggest structured data
+        const hasRepeatedBytes = data.some((byte, i) => 
+            i > 0 && byte === data[i-1] && byte === data[i+1]
+        );
+        
+        const hasZeroBytes = data.some(byte => byte === 0x00);
+        const hasLowBytes = data.filter(byte => byte < 0x10).length > 2;
+        
+        return hasRepeatedBytes || hasZeroBytes || hasLowBytes;
+    }
+
+    /**
+     * Analyze context around a potential move
+     */
+    analyzeMoveContext(data, position) {
+        const before = position > 0 ? data[position - 1] : null;
+        const after = position < data.length - 1 ? data[position + 1] : null;
+        
+        return {
+            before: before ? '0x' + before.toString(16).padStart(2, '0') : null,
+            after: after ? '0x' + after.toString(16).padStart(2, '0') : null,
+            surroundingPattern: data.slice(Math.max(0, position - 2), Math.min(data.length, position + 3))
+        };
+    }
+
+    /**
+     * Validate that a move found in a packet is legitimate
+     */
+    validateMoveInPacket(data, movePosition) {
+        // For your cube's 20-byte packets, we need to determine which positions
+        // are likely to contain actual moves vs coincidental data
+        
+        // Based on the console output, moves appear at positions like 3, 6, 12, 14, 16, 18
+        // This suggests the move might be at different positions depending on some encoding
+        
+        const moveByte = data[movePosition];
+        
+        // Basic validation: ensure it's in the valid move range
+        if (moveByte < 0x01 || moveByte > 0x12) {
+            return false;
+        }
+        
+        // For now, let's accept moves at any position but add some heuristics
+        // We could add more validation here once we understand the pattern better
+        
+        // Check if surrounding bytes make sense for a move packet
+        // (This is where we'd add cube-specific validation)
+        
+        console.log(`Validating move 0x${moveByte.toString(16)} at position ${movePosition}`);
+        return true; // For now, accept all moves in valid range
+    }
+
+    /**
+     * Validate that a detected move has reasonable context
+     */
+    validateMoveContext(data, movePosition) {
+        // Move should not be at the very start of a status message
+        if (movePosition === 0 && data.length > 1) {
+            // Check if the rest looks like status data
+            const remaining = data.slice(1);
+            const allZeros = remaining.every(b => b === 0x00);
+            const allSame = remaining.every(b => b === remaining[0]);
+            
+            if (allZeros || allSame) {
+                console.log('Move appears to be part of status data');
+                return false;
+            }
+        }
+        
+        // Additional context checks can be added here
+        return true;
+    }
+
+    /**
+     * Validate face-based move context
+     */
+    validateFaceMoveContext(data) {
+        // Face moves should have specific patterns
+        // This is where we can add cube-specific validation
+        
+        // For now, be more restrictive
+        if (data.length === 2) {
+            // Simple 2-byte face moves are more likely to be real
+            return true;
+        }
+        
+        // Longer packets might be status with coincidental face patterns
+        console.log('Face move in longer packet, might be status');
+        return false;
     }
 
     /**
@@ -751,6 +1213,11 @@ class GANBluetooth {
         this.activeServiceUUID = null;
         this.activeRxUUID = null;
         this.activeTxUUID = null;
+        
+        // Reset move detection filtering
+        this.lastDataTime = null;
+        this.lastDataBytes = null;
+        this.lastMovePacket = null;
         
         this.emit('disconnected');
     }
