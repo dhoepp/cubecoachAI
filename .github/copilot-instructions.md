@@ -3,6 +3,7 @@
 This is a JavaScript web application for connecting to GAN 356i Carry smart cubes via Bluetooth Low Energy (BLE) using the Web Bluetooth API.
 
 ## Project Context
+
 - Pure JavaScript/HTML/CSS application (no frameworks)
 - Connects to GAN cube via Web Bluetooth API
 - Parses cube move data and timing information
@@ -10,6 +11,7 @@ This is a JavaScript web application for connecting to GAN 356i Carry smart cube
 - Provides detailed solve summaries for ChatGPT analysis
 
 ## Key Components
+
 - `gan-bluetooth.js`: Bluetooth connection and data parsing
 - `solve-parser.js`: Cube solve analysis and phase detection
 - `timer.js`: Precise timing functionality
@@ -18,6 +20,7 @@ This is a JavaScript web application for connecting to GAN 356i Carry smart cube
 - `styles.css`: Modern responsive styling
 
 ## Technical Notes
+
 - Uses Web Bluetooth API (Chrome/Edge required)
 - Implements GAN cube BLE protocol
 - Real-time move tracking and phase analysis
@@ -25,6 +28,7 @@ This is a JavaScript web application for connecting to GAN 356i Carry smart cube
 - Responsive design for mobile/desktop use
 
 ## Code Style
+
 - ES6+ JavaScript with classes
 - Modular architecture with event-driven communication
 - Clean, semantic HTML structure

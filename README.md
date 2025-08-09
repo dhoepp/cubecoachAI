@@ -5,30 +5,35 @@ A modern web application that connects to GAN 356i Carry smart cubes via Bluetoo
 ## Features
 
 ### 🔗 Bluetooth Connectivity
+
 - Connect to GAN 356i Carry cube via Web Bluetooth API
 - Real-time move tracking and cube state monitoring
 - Battery level monitoring
 - Automatic connection status updates
 
 ### ⏱️ Precision Timing
+
 - High-precision solve timer (60 FPS updates)
 - Manual and automatic timer controls
 - Automatic start/stop based on cube state
 - Split timing for phase analysis
 
 ### 📊 Solve Analysis
+
 - Automatic phase detection (Cross, F2L, OLL, PLL)
 - Move counting and timing for each phase
 - Algorithm recognition for OLL/PLL
 - TPS (Turns Per Second) calculation
 
 ### 📱 Modern UI
+
 - Clean, responsive design
 - Editable fields for manual corrections
 - Real-time data visualization
 - Mobile-friendly interface
 
 ### 🚀 Export for AI Coaching
+
 - Generate detailed solve summaries
 - Optimized format for ChatGPT analysis
 - One-click copy to clipboard
@@ -37,6 +42,7 @@ A modern web application that connects to GAN 356i Carry smart cubes via Bluetoo
 ## Browser Requirements
 
 This application requires a browser that supports the Web Bluetooth API:
+
 - **Chrome 56+** (recommended)
 - **Edge 79+**
 - **Opera 43+**
@@ -54,19 +60,22 @@ This application requires a browser that supports the Web Bluetooth API:
 ## How to Use
 
 ### Initial Setup
+
 1. Ensure your GAN 356i Carry cube is charged and in pairing mode
 2. Open the application in Chrome or Edge
 3. Click "Connect Cube" and select your device from the browser dialog
 
 ### Recording Solves
+
 1. **Automatic Mode**: Timer starts when you make the first move and stops when solved
 2. **Manual Mode**: Use the timer controls to start/stop manually
 3. **Edit Data**: Manually adjust any timing or move data as needed
 
 ### Getting AI Feedback
+
 1. Complete a solve (automatically parsed or manually entered)
 2. Click "Generate Summary" to create analysis text
-3. Click "Copy to Clipboard" 
+3. Click "Copy to Clipboard"
 4. Paste into ChatGPT with a request like: "Please analyze this speedcube solve and provide improvement suggestions"
 
 ## Technical Architecture
@@ -89,6 +98,7 @@ This application requires a browser that supports the Web Bluetooth API:
 ## Development
 
 ### File Structure
+
 ```
 cubecoachAI/
 ├── index.html          # Main application page
@@ -114,6 +124,7 @@ cubecoachAI/
 ### Cube Protocol
 
 The application implements the standard GAN cube BLE protocol:
+
 - **Service UUID**: `6e400001-b5a3-f393-e0a9-e50e24dcca9e`
 - **TX Characteristic**: `6e400003-b5a3-f393-e0a9-e50e24dcca9e` (notifications from cube)
 - **RX Characteristic**: `6e400002-b5a3-f393-e0a9-e50e24dcca9e` (commands to cube)
@@ -123,20 +134,24 @@ The application implements the standard GAN cube BLE protocol:
 ### Common Issues
 
 **"Web Bluetooth not supported"**
+
 - Use Chrome 56+, Edge 79+, or Opera 43+
 - Ensure HTTPS connection (required for Web Bluetooth)
 
 **"Cube not found"**
+
 - Make sure cube is charged and awake
 - Try shaking the cube to activate it
 - Check that cube is not connected to another app
 
 **"Connection lost"**
+
 - Cube may have gone to sleep
 - Try reconnecting through the app
 - Check cube battery level
 
 **Timer not starting automatically**
+
 - Ensure cube is properly connected
 - Try manual timer controls
 - Check browser console for error messages
