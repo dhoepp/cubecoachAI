@@ -492,6 +492,7 @@ class GoCubeBluetooth {
 
     /**
      * Analyze acceleration pattern to determine move type
+     * Updated with calibration data from user's GoCube
      */
     analyzeMovePattern(currentAccel, lastAccel) {
         // Calculate the primary axis of movement
@@ -512,35 +513,38 @@ class GoCubeBluetooth {
             maxDelta = deltaZ;
         }
         
-        // Calculate the direction of movement
+        // Calculate direction properly
         const direction = currentAccel[primaryAxis] > lastAccel[primaryAxis] ? '+' : '-';
         
-        // More lenient move mapping - just needs to be the dominant axis
+        // Move mapping based on calibration results
+        // From user's GoCube: U moves use X axis, most others use Z axis
         let move = 'Move';
-        let confidence = 0.5; // Base confidence
+        let confidence = 0.5;
         
-        // Map axis to cube faces with improved logic
-        // Lower threshold for face detection, focus on dominant axis
-        if (maxDelta > 0.8) { // Lower threshold for detection
-            switch (primaryAxis) {
-                case 'x':
-                    // X-axis typically corresponds to R/L faces
+        if (maxDelta > 0.5) { // Threshold based on calibration data
+            
+            // Based on calibration data patterns:
+            if (primaryAxis === 'x') {
+                // X-axis movements are U/D faces (based on calibration showing U uses X-axis)
+                move = direction === '+' ? 'U' : "U'";
+                confidence = Math.min(deltaX / 2.0, 1.0);
+            } else if (primaryAxis === 'z') {
+                // Z-axis movements are other faces (R, F, L, B, D based on calibration)
+                // We'll need to refine this based on more specific patterns
+                // For now, cycle through the faces that showed up in calibration
+                if (deltaZ > 0.8) {
                     move = direction === '+' ? 'R' : "R'";
-                    confidence = Math.min(deltaX / 3.0, 1.0);
-                    break;
-                case 'y':
-                    // Y-axis typically corresponds to U/D faces
-                    move = direction === '+' ? 'U' : "U'";
-                    confidence = Math.min(deltaY / 3.0, 1.0);
-                    break;
-                case 'z':
-                    // Z-axis typically corresponds to F/B faces
+                } else {
                     move = direction === '+' ? 'F' : "F'";
-                    confidence = Math.min(deltaZ / 3.0, 1.0);
-                    break;
+                }
+                confidence = Math.min(deltaZ / 2.0, 1.0);
+            } else if (primaryAxis === 'y') {
+                // Y-axis movements (may be D faces or other orientations)
+                move = direction === '+' ? 'D' : "D'";
+                confidence = Math.min(deltaY / 2.0, 1.0);
             }
             
-            // Boost confidence if this axis is clearly dominant
+            // Boost confidence for clear dominance
             const secondMaxDelta = Math.max(
                 primaryAxis !== 'x' ? deltaX : 0,
                 primaryAxis !== 'y' ? deltaY : 0,
@@ -548,11 +552,11 @@ class GoCubeBluetooth {
             );
             
             if (maxDelta > secondMaxDelta * 1.5) {
-                confidence = Math.min(confidence * 1.3, 1.0); // Boost confidence for clear dominance
+                confidence = Math.min(confidence * 1.3, 1.0);
             }
         }
         
-        console.log(`🔍 Move analysis: axis=${primaryAxis}, delta=${maxDelta.toFixed(2)}, move=${move}, confidence=${confidence.toFixed(2)}`);
+        console.log(`🔍 Move analysis: axis=${primaryAxis}, delta=${maxDelta.toFixed(2)}, direction=${direction}, move=${move}, confidence=${confidence.toFixed(2)}`);
         
         return {
             type: 'move',
