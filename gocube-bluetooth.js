@@ -469,17 +469,18 @@ class GoCubeBluetooth {
         const cutoffTime = sensorData.timestamp - 2000;
         this.accelerationHistory = this.accelerationHistory.filter(h => h.timestamp > cutoffTime);
         
-        // Detect move: significant acceleration change with reasonable timing
-        if (accelerationChange > 2.0 && timeGap > 50 && timeGap < 500) {
+        // Detect move: lower threshold for better detection
+        // Reduced from 2.0 to 1.5 for better sensitivity
+        if (accelerationChange > 1.5 && timeGap > 50 && timeGap < 500) {
             
-            // Prevent duplicate detections
-            if (!this.lastMoveDetection || (sensorData.timestamp - this.lastMoveDetection) > 800) {
+            // Prevent duplicate detections (reduced cooldown for faster detection)
+            if (!this.lastMoveDetection || (sensorData.timestamp - this.lastMoveDetection) > 600) {
                 
                 // Analyze the acceleration pattern to determine move type
                 const moveData = this.analyzeMovePattern(sensorData, this.lastAcceleration);
                 
-                if (moveData) {
-                    console.log('🎯 Move detected from acceleration!', moveData.move);
+                if (moveData && moveData.confidence > 0.3) { // Lower confidence threshold
+                    console.log('🎯 Move detected from acceleration!', moveData.move, `(confidence: ${(moveData.confidence * 100).toFixed(1)}%)`);
                     this.emit('move', moveData);
                     this.lastMoveDetection = sensorData.timestamp;
                 }
@@ -511,41 +512,60 @@ class GoCubeBluetooth {
             maxDelta = deltaZ;
         }
         
-        // Basic move mapping based on primary axis
-        // This is a simplified approach - real detection would need calibration
-        let move = 'Move';
+        // Calculate the direction of movement
         const direction = currentAccel[primaryAxis] > lastAccel[primaryAxis] ? '+' : '-';
         
-        // Map axis to cube faces (this may need adjustment based on cube orientation)
-        switch (primaryAxis) {
-            case 'x':
-                move = deltaX > deltaY && deltaX > deltaZ ? (direction === '+' ? 'R' : "R'") : 'Move';
-                break;
-            case 'y':
-                move = deltaY > deltaX && deltaY > deltaZ ? (direction === '+' ? 'U' : "U'") : 'Move';
-                break;
-            case 'z':
-                move = deltaZ > deltaX && deltaZ > deltaY ? (direction === '+' ? 'F' : "F'") : 'Move';
-                break;
+        // More lenient move mapping - just needs to be the dominant axis
+        let move = 'Move';
+        let confidence = 0.5; // Base confidence
+        
+        // Map axis to cube faces with improved logic
+        // Lower threshold for face detection, focus on dominant axis
+        if (maxDelta > 0.8) { // Lower threshold for detection
+            switch (primaryAxis) {
+                case 'x':
+                    // X-axis typically corresponds to R/L faces
+                    move = direction === '+' ? 'R' : "R'";
+                    confidence = Math.min(deltaX / 3.0, 1.0);
+                    break;
+                case 'y':
+                    // Y-axis typically corresponds to U/D faces
+                    move = direction === '+' ? 'U' : "U'";
+                    confidence = Math.min(deltaY / 3.0, 1.0);
+                    break;
+                case 'z':
+                    // Z-axis typically corresponds to F/B faces
+                    move = direction === '+' ? 'F' : "F'";
+                    confidence = Math.min(deltaZ / 3.0, 1.0);
+                    break;
+            }
+            
+            // Boost confidence if this axis is clearly dominant
+            const secondMaxDelta = Math.max(
+                primaryAxis !== 'x' ? deltaX : 0,
+                primaryAxis !== 'y' ? deltaY : 0,
+                primaryAxis !== 'z' ? deltaZ : 0
+            );
+            
+            if (maxDelta > secondMaxDelta * 1.5) {
+                confidence = Math.min(confidence * 1.3, 1.0); // Boost confidence for clear dominance
+            }
         }
         
-        // If movement is ambiguous or small, just call it a generic move
-        if (maxDelta < 1.5) {
-            move = 'Move';
-        }
+        console.log(`🔍 Move analysis: axis=${primaryAxis}, delta=${maxDelta.toFixed(2)}, move=${move}, confidence=${confidence.toFixed(2)}`);
         
         return {
             type: 'move',
             move: move,
-            confidence: Math.min(maxDelta / 5.0, 1.0), // Confidence based on acceleration magnitude
+            confidence: confidence,
             timestamp: currentAccel.timestamp,
             analysis: {
                 primaryAxis: primaryAxis,
                 delta: maxDelta,
                 direction: direction,
-                deltaX: deltaX,
-                deltaY: deltaY,
-                deltaZ: deltaZ
+                deltaX: deltaX.toFixed(2),
+                deltaY: deltaY.toFixed(2),
+                deltaZ: deltaZ.toFixed(2)
             }
         };
     }
