@@ -325,12 +325,16 @@ class GoCubeBluetooth {
         const moveCode = data[3]; // 0x04 in your examples
         const direction = data[4]; // 0x03 and 0x06 in your examples
         
+        console.log(`🔍 Parsing move packet: [${Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
+        console.log(`🔍 Move details: moveCode=0x${moveCode.toString(16)}, direction=0x${direction.toString(16)}`);
+        
         // Updated move mapping based on actual GoCube protocol
         // Your U moves are showing as 0x04 with directions 0x03 and 0x06
         let move = null;
         
         if (moveCode === 0x04) {
             // Face 4 appears to be U face based on your test
+            console.log(`🎯 Processing U face move with direction 0x${direction.toString(16)}`);
             if (direction === 0x03) {
                 move = "U";  // Your first move
             } else if (direction === 0x06) {
@@ -340,6 +344,7 @@ class GoCubeBluetooth {
             }
         } else {
             // For other faces, use a basic mapping (can be refined later)
+            console.log(`🎯 Processing other face: moveCode=0x${moveCode.toString(16)}`);
             const faceMap = {
                 0x01: "D", 0x02: "R", 0x03: "L", 
                 0x05: "F", 0x06: "B"
@@ -357,7 +362,7 @@ class GoCubeBluetooth {
         }
         
         if (move) {
-            console.log(`🎯 Parsed GoCube move: code=0x${moveCode.toString(16)}, direction=0x${direction.toString(16)} → ${move}`);
+            console.log(`🎯 Final parsed move: ${move}`);
             return {
                 type: 'move',
                 move: move,
@@ -369,6 +374,7 @@ class GoCubeBluetooth {
             };
         }
         
+        console.log(`❌ Failed to parse move from packet`);
         return null;
     }
 
