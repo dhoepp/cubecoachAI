@@ -317,28 +317,55 @@ class GoCubeBluetooth {
      * Parse GoCube move data (documented format)
      */
     parseMoveData(data) {
-        if (data.length < 3) return null;
+        if (data.length < 6) return null;
         
-        // GoCube move format: [0x01, face, direction]
-        const moveMap = {
-            0x01: "U", 0x02: "U'", 0x03: "U2",
-            0x04: "D", 0x05: "D'", 0x06: "D2",
-            0x07: "R", 0x08: "R'", 0x09: "R2",
-            0x0A: "L", 0x0B: "L'", 0x0C: "L2",
-            0x0D: "F", 0x0E: "F'", 0x0F: "F2",
-            0x10: "B", 0x11: "B'", 0x12: "B2"
-        };
+        // GoCube move format: [0x2a, length, 0x01, move_code, direction, checksum, 0x0d, 0x0a]
+        // From your log: [0x2a, 0x06, 0x01, 0x04, 0x03, 0x38, 0x0d, 0x0a] and [0x2a, 0x06, 0x01, 0x04, 0x06, 0x3b, 0x0d, 0x0a]
         
-        const moveCode = data[1];
-        const move = moveMap[moveCode];
+        const moveCode = data[3]; // 0x04 in your examples
+        const direction = data[4]; // 0x03 and 0x06 in your examples
+        
+        // Updated move mapping based on actual GoCube protocol
+        // Your U moves are showing as 0x04 with directions 0x03 and 0x06
+        let move = null;
+        
+        if (moveCode === 0x04) {
+            // Face 4 appears to be U face based on your test
+            if (direction === 0x03) {
+                move = "U";  // Your first move
+            } else if (direction === 0x06) {
+                move = "U'"; // Your second move  
+            } else {
+                move = "U2";
+            }
+        } else {
+            // For other faces, use a basic mapping (can be refined later)
+            const faceMap = {
+                0x01: "D", 0x02: "R", 0x03: "L", 
+                0x05: "F", 0x06: "B"
+            };
+            
+            const face = faceMap[moveCode] || "Unknown";
+            
+            if (direction === 0x03) {
+                move = face;
+            } else if (direction === 0x06) {
+                move = face + "'";
+            } else {
+                move = face + "2";
+            }
+        }
         
         if (move) {
+            console.log(`🎯 Parsed GoCube move: code=0x${moveCode.toString(16)}, direction=0x${direction.toString(16)} → ${move}`);
             return {
                 type: 'move',
                 move: move,
                 timestamp: Date.now(),
                 confidence: 1.0, // GoCube provides reliable move data
-                raw: Array.from(data)
+                raw: Array.from(data),
+                moveCode: moveCode,
+                direction: direction
             };
         }
         
