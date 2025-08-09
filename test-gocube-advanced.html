@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCube Advanced Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        
+        .acceleration-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        
+        .axis-bar {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        
+        .axis-label {
+            width: 20px;
+            font-weight: bold;
+        }
+        
+        .bar-container {
+            flex: 1;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            margin: 0 10px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.1s ease;
+        }
+        
+        .bar-x { background: #dc3545; }
+        .bar-y { background: #28a745; }
+        .bar-z { background: #007bff; }
+        
+        .axis-value {
+            width: 80px;
+            text-align: right;
+            font-size: 14px;
+        }
+        
+        .move-history {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .move-item {
+            padding: 5px;
+            margin: 2px 0;
+            border-radius: 3px;
+            border-left: 4px solid #007AFF;
+        }
+        
+        .move-item.u-move {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .test-controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .countdown {
+            font-size: 36px;
+            font-weight: bold;
+            color: #007AFF;
+            margin: 10px 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007AFF;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 GoCube Advanced Move Detection Test</h1>
+        <p>Real-time acceleration parsing and move detection from GoCube sensor data.</p>
+        
+        <div id="connection-status" class="status disconnected">
+            📡 Disconnected - Click Connect to start
+        </div>
+        
+        <div>
+            <button id="connect-btn" class="btn">Connect GoCube</button>
+            <button id="disconnect-btn" class="btn" disabled>Disconnect</button>
+            <button id="start-test-btn" class="btn" disabled>Start 5s Test</button>
+            <button id="clear-log-btn" class="btn">Clear All</button>
+        </div>
+        
+        <div class="test-controls" id="test-progress" style="display: none;">
+            <div class="countdown" id="countdown">Ready...</div>
+            <p>🎯 Perform 2 U face moves during the test</p>
+        </div>
+        
+        <div class="dashboard">
+            <!-- Real-time Acceleration Panel -->
+            <div class="panel">
+                <h3>📊 Real-time Acceleration</h3>
+                <div class="acceleration-display">
+                    <div class="axis-bar">
+                        <span class="axis-label">X:</span>
+                        <div class="bar-container">
+                            <div class="bar-fill bar-x" id="bar-x" style="width: 50%"></div>
+                        </div>
+                        <span class="axis-value" id="value-x">0.000g</span>
+                    </div>
+                    <div class="axis-bar">
+                        <span class="axis-label">Y:</span>
+                        <div class="bar-container">
+                            <div class="bar-fill bar-y" id="bar-y" style="width: 50%"></div>
+                        </div>
+                        <span class="axis-value" id="value-y">0.000g</span>
+                    </div>
+                    <div class="axis-bar">
+                        <span class="axis-label">Z:</span>
+                        <div class="bar-container">
+                            <div class="bar-fill bar-z" id="bar-z" style="width: 50%"></div>
+                        </div>
+                        <span class="axis-value" id="value-z">0.000g</span>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="magnitude">0.0</div>
+                        <div class="stat-label">Magnitude</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="packet-rate">0</div>
+                        <div class="stat-label">Packets/s</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="move-count">0</div>
+                        <div class="stat-label">Moves</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="u-moves">0</div>
+                        <div class="stat-label">U Moves</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Move Detection Panel -->
+            <div class="panel">
+                <h3>🎯 Move Detection History</h3>
+                <div class="move-history" id="move-history">
+                    <div style="color: #666; text-align: center; padding: 20px;">
+                        No moves detected yet. Try rotating the cube!
+                    </div>
+                </div>
+                <button id="clear-moves" class="btn" style="width: 100%; margin-top: 10px;">Clear History</button>
+            </div>
+        </div>
+        
+        <!-- Test Results -->
+        <div id="test-results" style="display: none;">
+            <h3>📊 Test Results</h3>
+            <div id="results-content"></div>
+        </div>
+    </div>
+
+    <script src="gocube-bluetooth.js"></script>
+    <script>
+        class GoCubeAdvancedTest {
+            constructor() {
+                this.bluetooth = new GoCubeBluetooth();
+                this.isConnected = false;
+                this.testInProgress = false;
+                this.testStartTime = 0;
+                this.moveHistory = [];
+                this.uMoveCount = 0;
+                this.packetCount = 0;
+                this.lastStatsUpdate = Date.now();
+                
+                this.initializeElements();
+                this.initializeEventListeners();
+                
+                // Start stats update interval
+                setInterval(() => this.updateStats(), 1000);
+            }
+            
+            initializeElements() {
+                this.connectBtn = document.getElementById('connect-btn');
+                this.disconnectBtn = document.getElementById('disconnect-btn');
+                this.startTestBtn = document.getElementById('start-test-btn');
+                this.clearLogBtn = document.getElementById('clear-log-btn');
+                this.connectionStatus = document.getElementById('connection-status');
+                this.testProgress = document.getElementById('test-progress');
+                this.countdown = document.getElementById('countdown');
+                this.moveHistory = document.getElementById('move-history');
+                this.clearMovesBtn = document.getElementById('clear-moves');
+                this.testResults = document.getElementById('test-results');
+                this.resultsContent = document.getElementById('results-content');
+                
+                // Acceleration display elements
+                this.barX = document.getElementById('bar-x');
+                this.barY = document.getElementById('bar-y');
+                this.barZ = document.getElementById('bar-z');
+                this.valueX = document.getElementById('value-x');
+                this.valueY = document.getElementById('value-y');
+                this.valueZ = document.getElementById('value-z');
+                this.magnitude = document.getElementById('magnitude');
+                this.packetRate = document.getElementById('packet-rate');
+                this.moveCount = document.getElementById('move-count');
+                this.uMoves = document.getElementById('u-moves');
+            }
+            
+            initializeEventListeners() {
+                // UI Events
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.disconnectBtn.addEventListener('click', () => this.disconnect());
+                this.startTestBtn.addEventListener('click', () => this.startTest());
+                this.clearLogBtn.addEventListener('click', () => this.clearAll());
+                this.clearMovesBtn.addEventListener('click', () => this.clearMoveHistory());
+                
+                // GoCube Events
+                this.bluetooth.on('connected', (data) => this.handleConnected(data));
+                this.bluetooth.on('disconnected', () => this.handleDisconnected());
+                this.bluetooth.on('error', (error) => this.handleError(error));
+                this.bluetooth.on('accelerometer', (data) => this.handleAccelerometer(data));
+                this.bluetooth.on('move', (data) => this.handleMove(data));
+                this.bluetooth.on('rawData', (data) => this.handleRawData(data));
+            }
+            
+            async connect() {
+                try {
+                    this.connectBtn.disabled = true;
+                    await this.bluetooth.connect();
+                } catch (error) {
+                    this.connectBtn.disabled = false;
+                    console.error('Connection failed:', error);
+                }
+            }
+            
+            async disconnect() {
+                try {
+                    await this.bluetooth.disconnect();
+                } catch (error) {
+                    console.error('Disconnect error:', error);
+                }
+            }
+            
+            startTest() {
+                if (this.testInProgress) return;
+                
+                this.testInProgress = true;
+                this.testStartTime = Date.now();
+                this.moveHistory = [];
+                this.uMoveCount = 0;
+                
+                this.testProgress.style.display = 'block';
+                this.startTestBtn.disabled = true;
+                this.updateMoveCount();
+                
+                // 5-second countdown
+                let timeLeft = 5;
+                this.countdown.textContent = `${timeLeft}`;
+                
+                const countdownInterval = setInterval(() => {
+                    timeLeft--;
+                    if (timeLeft > 0) {
+                        this.countdown.textContent = `${timeLeft}`;
+                    } else {
+                        this.countdown.textContent = 'Complete!';
+                        clearInterval(countdownInterval);
+                        this.endTest();
+                    }
+                }, 1000);
+            }
+            
+            endTest() {
+                this.testInProgress = false;
+                this.startTestBtn.disabled = false;
+                
+                const duration = (Date.now() - this.testStartTime) / 1000;
+                const totalMoves = this.moveHistory.length;
+                
+                this.testResults.style.display = 'block';
+                this.resultsContent.innerHTML = `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                        <h4>📊 5-Second Test Results</h4>
+                        <p><strong>Duration:</strong> ${duration.toFixed(1)}s</p>
+                        <p><strong>Total Moves Detected:</strong> ${totalMoves}</p>
+                        <p><strong>U Face Moves:</strong> ${this.uMoveCount} / 2 expected</p>
+                        <p><strong>Data Packets:</strong> ${this.packetCount}</p>
+                        <p><strong>Success:</strong> ${this.uMoveCount >= 2 ? '✅ PASS' : '❌ FAIL'}</p>
+                    </div>
+                `;
+            }
+            
+            handleConnected(data) {
+                this.isConnected = true;
+                this.connectBtn.disabled = true;
+                this.disconnectBtn.disabled = false;
+                this.startTestBtn.disabled = false;
+                this.connectionStatus.className = 'status connected';
+                this.connectionStatus.textContent = `📡 Connected to ${data.name || 'GoCube'}`;
+            }
+            
+            handleDisconnected() {
+                this.isConnected = false;
+                this.connectBtn.disabled = false;
+                this.disconnectBtn.disabled = true;
+                this.startTestBtn.disabled = true;
+                this.connectionStatus.className = 'status disconnected';
+                this.connectionStatus.textContent = '📡 Disconnected';
+            }
+            
+            handleError(error) {
+                console.error('GoCube error:', error);
+                this.connectBtn.disabled = false;
+            }
+            
+            handleAccelerometer(data) {
+                this.packetCount++;
+                
+                // Update acceleration bars
+                this.updateAccelerationDisplay(data.x, data.y, data.z);
+            }
+            
+            handleMove(data) {
+                const moveItem = {
+                    move: data.move,
+                    confidence: data.confidence,
+                    timestamp: Date.now(),
+                    isUMove: data.move && data.move.startsWith('U')
+                };
+                
+                this.moveHistory.push(moveItem);
+                
+                if (moveItem.isUMove) {
+                    this.uMoveCount++;
+                }
+                
+                this.updateMoveHistory();
+                this.updateMoveCount();
+            }
+            
+            handleRawData(data) {
+                // Just count packets for stats
+            }
+            
+            updateAccelerationDisplay(x, y, z) {
+                // Calculate magnitude
+                const mag = Math.sqrt(x*x + y*y + z*z);
+                
+                // Update values
+                this.valueX.textContent = `${x.toFixed(3)}g`;
+                this.valueY.textContent = `${y.toFixed(3)}g`;
+                this.valueZ.textContent = `${z.toFixed(3)}g`;
+                this.magnitude.textContent = mag.toFixed(2);
+                
+                // Update bars (scale to -3g to +3g range)
+                const scaleBar = (value) => Math.max(0, Math.min(100, ((value + 3) / 6) * 100));
+                
+                this.barX.style.width = `${scaleBar(x)}%`;
+                this.barY.style.width = `${scaleBar(y)}%`;
+                this.barZ.style.width = `${scaleBar(z)}%`;
+            }
+            
+            updateMoveHistory() {
+                if (this.moveHistory.length === 0) {
+                    this.moveHistory.innerHTML = `
+                        <div style="color: #666; text-align: center; padding: 20px;">
+                            No moves detected yet. Try rotating the cube!
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const html = this.moveHistory.map((move, index) => {
+                    const time = new Date(move.timestamp).toLocaleTimeString();
+                    const cssClass = move.isUMove ? 'move-item u-move' : 'move-item';
+                    return `
+                        <div class="${cssClass}">
+                            <strong>${move.move}</strong> 
+                            (${(move.confidence * 100).toFixed(1)}% confidence) 
+                            <small>@ ${time}</small>
+                        </div>
+                    `;
+                }).reverse().join('');
+                
+                this.moveHistory.innerHTML = html;
+                this.moveHistory.scrollTop = 0;
+            }
+            
+            updateMoveCount() {
+                this.moveCount.textContent = this.moveHistory.length;
+                this.uMoves.textContent = this.uMoveCount;
+            }
+            
+            updateStats() {
+                const now = Date.now();
+                const timeDiff = now - this.lastStatsUpdate;
+                const packetsThisSecond = this.packetCount;
+                
+                this.packetRate.textContent = Math.round((packetsThisSecond * 1000) / timeDiff);
+                this.packetCount = 0;
+                this.lastStatsUpdate = now;
+            }
+            
+            clearMoveHistory() {
+                this.moveHistory = [];
+                this.uMoveCount = 0;
+                this.updateMoveHistory();
+                this.updateMoveCount();
+            }
+            
+            clearAll() {
+                this.clearMoveHistory();
+                this.testResults.style.display = 'none';
+                this.testProgress.style.display = 'none';
+                this.packetCount = 0;
+            }
+        }
+        
+        // Initialize the test when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.goCubeAdvancedTest = new GoCubeAdvancedTest();
+        });
+    </script>
+</body>
+</html>

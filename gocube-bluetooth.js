@@ -33,6 +33,11 @@ class GoCubeBluetooth {
         this.accelerometerEnabled = true;
         this.moveDetectionOnly = false; // Set to true to ignore accelerometer data
         
+        // Move detection from acceleration
+        this.lastAcceleration = null;
+        this.accelerationHistory = [];
+        this.lastMoveDetection = null;
+        
         // Performance monitoring
         this.performanceStats = {
             packetsPerSecond: 0,
@@ -230,6 +235,7 @@ class GoCubeBluetooth {
                 this.handleMoveData(data);
                 break;
             case 'accelerometer':
+            case 'sensor':
                 if (this.accelerometerEnabled && !this.moveDetectionOnly) {
                     this.handleAccelerometerData(data);
                 }
@@ -252,19 +258,26 @@ class GoCubeBluetooth {
     identifyPacketType(data) {
         if (data.length === 0) return 'unknown';
         
-        // GoCube packet identification based on first byte(s)
-        switch (data[0]) {
-            case 0x01:
-                return 'move';
-            case 0x02:
-                return 'accelerometer';
-            case 0x03:
-                return 'battery';
-            case 0x04:
-                return 'status';
-            default:
-                return 'unknown';
+        // GoCube uses ASCII-based protocol starting with 0x2a ('*')
+        if (data[0] === 0x2a) {
+            if (data.length >= 6) {
+                // Check the packet type identifier (second byte after length)
+                const typeIndicator = data[2];
+                switch (typeIndicator) {
+                    case 0x01:
+                        return 'move';
+                    case 0x03:
+                        return 'accelerometer'; // Most common - sensor data
+                    case 0x04:
+                        return 'battery';
+                    default:
+                        return 'sensor'; // Default to sensor data for unknown types
+                }
+            }
+            return 'sensor'; // Default for GoCube packets
         }
+        
+        return 'unknown';
     }
 
     /**
@@ -275,7 +288,7 @@ class GoCubeBluetooth {
             const moveData = this.parseMoveData(data);
             if (moveData) {
                 console.log('🎯 Move detected:', moveData.move);
-                this.emit('moveData', moveData);
+                this.emit('move', moveData);
             }
         } catch (error) {
             console.warn('⚠️ Error parsing move data:', error);
@@ -283,19 +296,20 @@ class GoCubeBluetooth {
     }
 
     /**
-     * Handle accelerometer data (high frequency, low priority)
+     * Handle accelerometer/sensor data (high frequency, low priority)
      */
     handleAccelerometerData(data) {
         try {
-            // Only process accelerometer data if specifically requested
-            if (this.eventListeners.has('accelerometerData')) {
-                const accelData = this.parseAccelerometerData(data);
-                if (accelData) {
-                    this.emit('accelerometerData', accelData);
-                }
+            const sensorData = this.parseGoCubeSensorData(data);
+            if (sensorData) {
+                // Emit as accelerometer event for test compatibility
+                this.emit('accelerometer', sensorData);
+                
+                // Also check for moves based on acceleration changes
+                this.detectMoveFromAcceleration(sensorData);
             }
         } catch (error) {
-            console.warn('⚠️ Error parsing accelerometer data:', error);
+            console.warn('⚠️ Error parsing sensor data:', error);
         }
     }
 
@@ -349,6 +363,190 @@ class GoCubeBluetooth {
             z: z - 32768,
             timestamp: Date.now(),
             raw: Array.from(data)
+        };
+    }
+
+    /**
+     * Parse GoCube sensor data (ASCII-based protocol)
+     */
+    parseGoCubeSensorData(data) {
+        try {
+            // Convert bytes to ASCII string
+            const asciiString = String.fromCharCode(...data);
+            
+            // GoCube format: *[length][type][data]#[data]#...
+            if (!asciiString.startsWith('*')) {
+                return null;
+            }
+
+            // Extract numeric values from the ASCII data
+            const numbers = [];
+            let currentNumber = '';
+            let isNegative = false;
+            
+            for (let i = 2; i < asciiString.length; i++) {
+                const char = asciiString[i];
+                
+                if (char === '-') {
+                    isNegative = true;
+                } else if (char >= '0' && char <= '9') {
+                    currentNumber += char;
+                } else if (char === '#' || char === '\r' || char === '\n' || i === asciiString.length - 1) {
+                    if (currentNumber) {
+                        let value = parseInt(currentNumber, 10);
+                        if (isNegative) value = -value;
+                        numbers.push(value);
+                        currentNumber = '';
+                        isNegative = false;
+                    }
+                }
+            }
+            
+            // If we have at least 3 values, treat as x, y, z accelerometer data
+            if (numbers.length >= 3) {
+                const sensorData = {
+                    type: 'accelerometer',
+                    x: numbers[0] / 1000.0, // Convert to g-force (assuming milli-g)
+                    y: numbers[1] / 1000.0,
+                    z: numbers[2] / 1000.0,
+                    timestamp: Date.now(),
+                    raw: Array.from(data),
+                    rawNumbers: numbers
+                };
+                
+                return sensorData;
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn('⚠️ Error parsing GoCube sensor data:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Detect moves from acceleration changes
+     */
+    detectMoveFromAcceleration(sensorData) {
+        if (!this.lastAcceleration) {
+            this.lastAcceleration = sensorData;
+            this.accelerationHistory = [];
+            return;
+        }
+        
+        // Calculate acceleration magnitude
+        const magnitude = Math.sqrt(
+            sensorData.x * sensorData.x + 
+            sensorData.y * sensorData.y + 
+            sensorData.z * sensorData.z
+        );
+        
+        const lastMagnitude = Math.sqrt(
+            this.lastAcceleration.x * this.lastAcceleration.x + 
+            this.lastAcceleration.y * this.lastAcceleration.y + 
+            this.lastAcceleration.z * this.lastAcceleration.z
+        );
+        
+        // Detect significant acceleration changes (indicating a move)
+        const accelerationChange = Math.abs(magnitude - lastMagnitude);
+        const timeGap = sensorData.timestamp - this.lastAcceleration.timestamp;
+        
+        // Store in history for pattern analysis
+        if (!this.accelerationHistory) {
+            this.accelerationHistory = [];
+        }
+        
+        this.accelerationHistory.push({
+            magnitude: magnitude,
+            change: accelerationChange,
+            timestamp: sensorData.timestamp,
+            x: sensorData.x,
+            y: sensorData.y,
+            z: sensorData.z
+        });
+        
+        // Keep only recent history (last 2 seconds)
+        const cutoffTime = sensorData.timestamp - 2000;
+        this.accelerationHistory = this.accelerationHistory.filter(h => h.timestamp > cutoffTime);
+        
+        // Detect move: significant acceleration change with reasonable timing
+        if (accelerationChange > 2.0 && timeGap > 50 && timeGap < 500) {
+            
+            // Prevent duplicate detections
+            if (!this.lastMoveDetection || (sensorData.timestamp - this.lastMoveDetection) > 800) {
+                
+                // Analyze the acceleration pattern to determine move type
+                const moveData = this.analyzeMovePattern(sensorData, this.lastAcceleration);
+                
+                if (moveData) {
+                    console.log('🎯 Move detected from acceleration!', moveData.move);
+                    this.emit('move', moveData);
+                    this.lastMoveDetection = sensorData.timestamp;
+                }
+            }
+        }
+        
+        this.lastAcceleration = sensorData;
+    }
+
+    /**
+     * Analyze acceleration pattern to determine move type
+     */
+    analyzeMovePattern(currentAccel, lastAccel) {
+        // Calculate the primary axis of movement
+        const deltaX = Math.abs(currentAccel.x - lastAccel.x);
+        const deltaY = Math.abs(currentAccel.y - lastAccel.y);
+        const deltaZ = Math.abs(currentAccel.z - lastAccel.z);
+        
+        // Determine which axis had the most change
+        let primaryAxis = 'x';
+        let maxDelta = deltaX;
+        
+        if (deltaY > maxDelta) {
+            primaryAxis = 'y';
+            maxDelta = deltaY;
+        }
+        if (deltaZ > maxDelta) {
+            primaryAxis = 'z';
+            maxDelta = deltaZ;
+        }
+        
+        // Basic move mapping based on primary axis
+        // This is a simplified approach - real detection would need calibration
+        let move = 'Move';
+        const direction = currentAccel[primaryAxis] > lastAccel[primaryAxis] ? '+' : '-';
+        
+        // Map axis to cube faces (this may need adjustment based on cube orientation)
+        switch (primaryAxis) {
+            case 'x':
+                move = deltaX > deltaY && deltaX > deltaZ ? (direction === '+' ? 'R' : "R'") : 'Move';
+                break;
+            case 'y':
+                move = deltaY > deltaX && deltaY > deltaZ ? (direction === '+' ? 'U' : "U'") : 'Move';
+                break;
+            case 'z':
+                move = deltaZ > deltaX && deltaZ > deltaY ? (direction === '+' ? 'F' : "F'") : 'Move';
+                break;
+        }
+        
+        // If movement is ambiguous or small, just call it a generic move
+        if (maxDelta < 1.5) {
+            move = 'Move';
+        }
+        
+        return {
+            type: 'move',
+            move: move,
+            confidence: Math.min(maxDelta / 5.0, 1.0), // Confidence based on acceleration magnitude
+            timestamp: currentAccel.timestamp,
+            analysis: {
+                primaryAxis: primaryAxis,
+                delta: maxDelta,
+                direction: direction,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ
+            }
         };
     }
 
