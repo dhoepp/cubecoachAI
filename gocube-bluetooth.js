@@ -326,30 +326,39 @@ class GoCubeBluetooth {
         console.log(`🔍 Parsing move packet: [${Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
         console.log(`🔍 Move details: moveCode=0x${moveCode.toString(16)}, direction=0x${direction.toString(16)}`);
         
-        // Comprehensive move mapping based on GoCube protocol
+        // Complete move mapping discovered from testing
         let move = null;
         
-        // Known mappings from testing:
+        // GoCube uses separate move codes for each move (not direction-based)
         const moveMapping = {
-            // U face (confirmed working)
-            0x04: { 0x03: "U", 0x06: "U'", default: "U2" },
+            // U face moves
+            0x04: "U",   // U clockwise
+            0x05: "U'",  // U counter-clockwise
             
-            // Other faces - will be updated as we discover them
-            0x01: { 0x03: "D", 0x06: "D'", default: "D2" },
-            0x02: { 0x03: "R", 0x06: "R'", default: "R2" },
-            0x03: { 0x03: "L", 0x06: "L'", default: "L2" },
-            0x05: { 0x03: "F", 0x06: "F'", default: "F2" },
-            0x06: { 0x03: "B", 0x06: "B'", default: "B2" }
+            // R face moves  
+            0x08: "R",   // R clockwise
+            0x09: "R'",  // R counter-clockwise
+            
+            // F face moves
+            0x02: "F",   // F clockwise
+            0x03: "F'",  // F counter-clockwise
+            
+            // L face moves
+            0x0a: "L",   // L clockwise
+            0x0b: "L'",  // L counter-clockwise
+            
+            // D face moves
+            0x06: "D",   // D clockwise
+            0x07: "D'",  // D counter-clockwise
+            
+            // B face moves
+            0x00: "B",   // B clockwise
+            0x01: "B'",  // B counter-clockwise
         };
         
         if (moveMapping[moveCode]) {
-            const faceMapping = moveMapping[moveCode];
-            if (faceMapping[direction]) {
-                move = faceMapping[direction];
-            } else {
-                move = faceMapping.default;
-            }
-            console.log(`🎯 Mapped move: code=0x${moveCode.toString(16)}, direction=0x${direction.toString(16)} → ${move}`);
+            move = moveMapping[moveCode];
+            console.log(`🎯 Mapped move: code=0x${moveCode.toString(16)} → ${move}`);
         } else {
             // Unknown move code - log it for analysis
             console.log(`❓ UNKNOWN move code: 0x${moveCode.toString(16)}, direction=0x${direction.toString(16)}`);
