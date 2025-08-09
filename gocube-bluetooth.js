@@ -201,15 +201,26 @@ class GoCubeBluetooth {
         const now = Date.now();
         const data = new Uint8Array(dataValue.buffer);
         
+        // TEMPORARILY DISABLE THROTTLING FOR TESTING
         // Performance optimization: throttle processing for high-frequency data
-        if (now - this.lastProcessTime < 10) { // Max 100 Hz processing
-            this.droppedPackets++;
-            return;
-        }
+        // if (now - this.lastProcessTime < 10) { // Max 100 Hz processing
+        //     this.droppedPackets++;
+        //     return;
+        // }
         this.lastProcessTime = now;
         
         this.packetCount++;
         this.updatePerformanceStats(data.length);
+        
+        // EMIT RAW DATA FOR ALL PACKETS (like GAN module did)
+        const hexString = Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+        console.log('📡 GoCube data received:', hexString, 'length:', data.length);
+        
+        this.emit('rawData', {
+            hex: hexString,
+            bytes: Array.from(data),
+            timestamp: now
+        });
         
         // Quick packet type identification to avoid unnecessary processing
         const packetType = this.identifyPacketType(data);
@@ -231,9 +242,7 @@ class GoCubeBluetooth {
                 break;
             default:
                 // Unknown packet type - log for debugging
-                if (window.CUBE_ANALYSIS_MODE) {
-                    console.log('🔍 Unknown packet:', Array.from(data).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
-                }
+                console.log('🔍 Unknown packet type:', packetType, 'data:', hexString);
         }
     }
 
